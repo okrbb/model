@@ -1,7 +1,0 @@
-js/firebase-config.js
-node_modules/
-.env
-.env.local
-.firebase/
-firebase-debug.log
-.DS_Store
