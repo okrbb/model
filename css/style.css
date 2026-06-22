@@ -1,0 +1,181 @@
+﻿/* Custom scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Leaflet map high legibility customization */
+.leaflet-container {
+    background: #cbd5e1 !important;
+}
+.leaflet-bar {
+    border: 1px solid #94a3b8 !important;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+}
+.leaflet-bar a {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+.leaflet-bar a:hover {
+    background-color: #f8fafc !important;
+    color: #f97316 !important;
+}
+
+/* Highly legible Custom Map Tooltip Styling */
+.custom-map-tooltip {
+    background: rgba(15, 23, 42, 0.95) !important;
+    border: 1px solid #ea580c !important;
+    color: #ffffff !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 11px !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3) !important;
+}
+.custom-map-tooltip::before {
+    border-top-color: rgba(15, 23, 42, 0.95) !important;
+}
+
+.map-city-dot {
+    border-radius: 999px;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.map-city-dot-icon {
+    pointer-events: none !important;
+}
+
+.map-city-dot.regional {
+    width: 8px;
+    height: 8px;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.96);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+}
+
+.map-city-dot.district {
+    width: 5px;
+    height: 5px;
+    background: #9ca3af;
+    border: 1px solid rgba(255, 255, 255, 0.96);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.24);
+}
+
+/* Pulsing Radar Effect for offline Node Mode */
+@keyframes pulse-node {
+    0% { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+.node-pulse-ring {
+    animation: pulse-node 1.8s infinite ease-out;
+    transform-origin: center;
+}
+
+.tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+@keyframes toast-in {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.toast-item {
+    animation: toast-in 180ms ease-out;
+}
+
+.export-png-legend {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 920;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
+    min-width: 280px;
+    max-width: 420px;
+    padding: 10px;
+    pointer-events: none;
+}
+
+.export-png-legend-title {
+    font-size: 10px;
+    font-weight: 900;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+}
+
+.export-png-legend-header,
+.export-png-legend-row {
+    display: grid;
+    grid-template-columns: minmax(100px, 1fr) 56px 84px;
+    gap: 8px;
+    align-items: center;
+}
+
+.export-png-legend-header {
+    font-size: 10px;
+    font-weight: 800;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.export-png-legend-row {
+    font-size: 11px;
+    color: #0f172a;
+    padding: 2px 0;
+}
+
+.export-png-legend-dp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-weight: 700;
+}
+
+.export-png-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    border: 1px solid rgba(15, 23, 42, 0.2);
+}
+
+.export-png-legend-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.export-png-legend-total {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 10px;
+    font-weight: 800;
+    color: #334155;
+    display: flex;
+    justify-content: space-between;
+}
