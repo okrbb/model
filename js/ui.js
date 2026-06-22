@@ -24,10 +24,376 @@ function showToast(message, tone = 'info') {
     }, 2200);
 }
 
+function toggleAuthForm() {
+    const formContainer = document.getElementById('auth-form-container');
+    const toggleBtn = document.getElementById('auth-toggle-form-btn');
+    if (!formContainer || !toggleBtn) return;
+    
+    const isHidden = formContainer.classList.contains('hidden');
+    if (isHidden) {
+        formContainer.classList.remove('hidden');
+        toggleBtn.classList.add('hidden');
+        document.getElementById('auth-email-input')?.focus();
+    } else {
+        formContainer.classList.add('hidden');
+        toggleBtn.classList.remove('hidden');
+    }
+}
+
+async function handleEmailSignIn() {
+    const emailInput = document.getElementById('auth-email-input');
+    const passwordInput = document.getElementById('auth-password-input');
+    if (!emailInput || !passwordInput) return;
+    
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) {
+        showToast('Email a heslo sú povinné.', 'warning');
+        return;
+    }
+    
+    const success = await requestFirebaseSignIn(email, password);
+    if (success) {
+        emailInput.value = '';
+        passwordInput.value = '';
+        document.getElementById('auth-form-container').classList.add('hidden');
+        document.getElementById('auth-toggle-form-btn')?.classList.remove('hidden');
+        showToast('Prihlásenie úspešné.', 'success');
+    }
+}
+
+function openPasswordModal() {
+    const access = getAccessContextSafe();
+    if (!access.isAuthenticated) {
+        showToast('Najprv sa prihláste.', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('password-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    const current = document.getElementById('password-current-input');
+    const next = document.getElementById('password-new-input');
+    const confirm = document.getElementById('password-new-confirm-input');
+    if (current) current.value = '';
+    if (next) next.value = '';
+    if (confirm) confirm.value = '';
+    current?.focus();
+}
+
+function closePasswordModal(event) {
+    if (event && event.target && event.target.id !== 'password-modal') return;
+    const modal = document.getElementById('password-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+}
+
+async function submitPasswordChange() {
+    const currentInput = document.getElementById('password-current-input');
+    const nextInput = document.getElementById('password-new-input');
+    const confirmInput = document.getElementById('password-new-confirm-input');
+    if (!currentInput || !nextInput || !confirmInput) return;
+
+    const currentPassword = currentInput.value || '';
+    const newPassword = nextInput.value || '';
+    const confirmPassword = confirmInput.value || '';
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        showToast('Vyplňte všetky polia.', 'warning');
+        return;
+    }
+
+    if (newPassword.length < 8) {
+        showToast('Nové heslo musí mať aspoň 8 znakov.', 'warning');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showToast('Nové heslá sa nezhodujú.', 'warning');
+        return;
+    }
+
+    if (currentPassword === newPassword) {
+        showToast('Nové heslo musí byť odlišné od aktuálneho.', 'warning');
+        return;
+    }
+
+    if (typeof requestFirebasePasswordChange !== 'function') {
+        showToast('Zmena hesla nie je dostupná.', 'warning');
+        return;
+    }
+
+    const result = await requestFirebasePasswordChange(currentPassword, newPassword);
+    if (!result?.ok) {
+        if (result?.code === 'auth/wrong-password' || result?.code === 'auth/invalid-credential') {
+            showToast('Aktuálne heslo nie je správne.', 'warning');
+        } else if (result?.code === 'auth/weak-password') {
+            showToast('Nové heslo je príliš slabé.', 'warning');
+        } else if (result?.code === 'auth/too-many-requests') {
+            showToast('Priveľa pokusov. Skúste to neskôr.', 'warning');
+        } else {
+            showToast('Zmena hesla zlyhala.', 'warning');
+        }
+        return;
+    }
+
+    closePasswordModal();
+    showToast('Heslo bolo úspešne zmenené.', 'success');
+}
+
+// Allow Enter key to submit the form
+document.addEventListener('DOMContentLoaded', () => {
+    const passwordInput = document.getElementById('auth-password-input');
+    if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleEmailSignIn();
+            }
+        });
+    }
+
+    const confirmNewPasswordInput = document.getElementById('password-new-confirm-input');
+    if (confirmNewPasswordInput) {
+        confirmNewPasswordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitPasswordChange();
+            }
+        });
+    }
+});
+
 function updateUndoButtonState() {
     const undoBtn = document.getElementById('undo-action-btn');
     if (!undoBtn) return;
-    undoBtn.disabled = actionHistory.length === 0;
+    undoBtn.disabled = actionHistory.length === 0 || !canEditCurrentRegion();
+}
+
+function getAccessContextSafe() {
+    if (typeof getCurrentAccessContext !== 'function') {
+        return {
+            role: 'admin',
+            regionKey: null,
+            isAuthenticated: false,
+            canEditAny: true
+        };
+    }
+    return getCurrentAccessContext();
+}
+
+function canEditCurrentRegion() {
+    if (currentRegionKey === 'slovakia') return false;
+    if (typeof canCurrentUserEditRegion !== 'function') return true;
+    return canCurrentUserEditRegion(currentRegionKey);
+}
+
+let adminUsersCache = [];
+
+function getRegionOptionsHtml(selectedRegionKey) {
+    const keys = Object.keys(regionMeta || {});
+    const selected = selectedRegionKey || '';
+    const options = ['<option value="">-</option>'];
+    keys.forEach((key) => {
+        const seat = regionMeta[key]?.seat || key;
+        options.push(`<option value="${key}" ${selected === key ? 'selected' : ''}>${seat}</option>`);
+    });
+    return options.join('');
+}
+
+function renderUserAdminRows(users) {
+    const body = document.getElementById('user-admin-table-body');
+    if (!body) return;
+    const access = getAccessContextSafe();
+
+    if (!users.length) {
+        body.innerHTML = `
+            <tr>
+                <td colspan="4" class="px-3 py-6 text-center text-slate-500">Nie sú dostupné žiadne používateľské záznamy.</td>
+            </tr>
+        `;
+        return;
+    }
+
+    body.innerHTML = users.map((user) => {
+        const isRegionEditor = user.role === 'region_editor';
+        const isCurrentUser = access.uid && user.uid === access.uid;
+        return `
+            <tr>
+                <td class="px-3 py-2 font-semibold text-slate-700">${user.email || user.uid}</td>
+                <td class="px-3 py-2">
+                    <select id="user-role-${user.uid}" onchange="onUserRoleChanged('${user.uid}')" class="bg-slate-100 border border-slate-300 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none ${isCurrentUser ? 'opacity-60 cursor-not-allowed' : ''}" ${isCurrentUser ? 'disabled' : ''}>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>admin</option>
+                        <option value="region_editor" ${user.role === 'region_editor' ? 'selected' : ''}>region_editor</option>
+                        <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>viewer</option>
+                    </select>
+                </td>
+                <td class="px-3 py-2">
+                    <select id="user-region-${user.uid}" class="bg-slate-100 border border-slate-300 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none ${(isRegionEditor && !isCurrentUser) ? '' : 'opacity-60'}" ${(isRegionEditor && !isCurrentUser) ? '' : 'disabled'}>
+                        ${getRegionOptionsHtml(user.regionKey)}
+                    </select>
+                </td>
+                <td class="px-3 py-2 text-right">
+                    <button onclick="saveUserAccessChange('${user.uid}')" class="${isCurrentUser ? 'bg-slate-300 text-slate-600 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} text-[11px] font-bold px-3 py-1.5 rounded-lg" ${isCurrentUser ? 'disabled' : ''}>${isCurrentUser ? 'Vlastný účet' : 'Uložiť'}</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function onUserRoleChanged(uid) {
+    const roleSelect = document.getElementById(`user-role-${uid}`);
+    const regionSelect = document.getElementById(`user-region-${uid}`);
+    if (!roleSelect || !regionSelect) return;
+
+    const isRegionEditor = roleSelect.value === 'region_editor';
+    regionSelect.disabled = !isRegionEditor;
+    regionSelect.classList.toggle('opacity-60', !isRegionEditor);
+    if (!isRegionEditor) {
+        regionSelect.value = '';
+    }
+}
+
+async function refreshUserAdminTable() {
+    const status = document.getElementById('user-admin-status');
+    if (status) status.textContent = 'Načítavam používateľov...';
+
+    if (typeof listFirebaseUsers !== 'function') {
+        if (status) status.textContent = 'Správa používateľov nie je dostupná.';
+        return;
+    }
+
+    adminUsersCache = await listFirebaseUsers();
+    renderUserAdminRows(adminUsersCache);
+    if (status) {
+        status.textContent = adminUsersCache.length
+            ? `Načítané: ${adminUsersCache.length} používateľov.`
+            : 'Používateľské dáta sa nenačítali.';
+    }
+}
+
+async function saveUserAccessChange(uid) {
+    const access = getAccessContextSafe();
+    if (access.uid && uid === access.uid) {
+        showToast('Nemôžete meniť vlastnú rolu.', 'warning');
+        return;
+    }
+
+    const roleSelect = document.getElementById(`user-role-${uid}`);
+    const regionSelect = document.getElementById(`user-region-${uid}`);
+    if (!roleSelect || !regionSelect) return;
+
+    const role = roleSelect.value;
+    const regionKey = role === 'region_editor' ? (regionSelect.value || null) : null;
+
+    if (role === 'region_editor' && !regionKey) {
+        showToast('Pre region_editor musíte zvoliť región.', 'warning');
+        return;
+    }
+
+    if (typeof updateFirebaseUserAccess !== 'function') {
+        showToast('Ukladanie používateľov nie je dostupné.', 'warning');
+        return;
+    }
+
+    const ok = await updateFirebaseUserAccess(uid, { role, regionKey });
+    if (!ok) {
+        showToast('Uloženie používateľa zlyhalo.', 'warning');
+        return;
+    }
+
+    showToast('Používateľ bol aktualizovaný.', 'success');
+    await refreshUserAdminTable();
+    redrawUiAndStats();
+}
+
+async function openUserAdminModal() {
+    const access = getAccessContextSafe();
+    if (!access.isAuthenticated || access.role !== 'admin') {
+        showToast('Správa používateľov je povolená iba pre admina.', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('user-admin-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    await refreshUserAdminTable();
+}
+
+function closeUserAdminModal(event) {
+    if (event && event.target && event.target.id !== 'user-admin-modal') return;
+    const modal = document.getElementById('user-admin-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+}
+
+function renderAccessPanel() {
+    const panel = document.getElementById('access-panel');
+    const roleBadge = document.getElementById('access-role-badge');
+    const regionBadge = document.getElementById('access-region-badge');
+    const formContainer = document.getElementById('auth-form-container');
+    const signInBtn = document.getElementById('auth-sign-in-btn');
+    const toggleFormBtn = document.getElementById('auth-toggle-form-btn');
+    const signOutBtn = document.getElementById('auth-sign-out-btn');
+    const changePasswordBtn = document.getElementById('auth-change-password-btn');
+    const openUserAdminBtn = document.getElementById('open-user-admin-btn');
+    const addDpBtn = document.getElementById('add-dp-btn');
+    const resetBtn = document.getElementById('reset-model-btn');
+
+    if (!panel || !roleBadge || !regionBadge) return;
+
+    const access = getAccessContextSafe();
+    panel.classList.remove('hidden');
+
+    const roleLabel = access.role === 'admin'
+        ? 'admin'
+        : access.role === 'region_editor'
+            ? 'region'
+            : 'viewer';
+
+    roleBadge.textContent = roleLabel;
+    roleBadge.className = access.role === 'admin'
+        ? 'text-[10px] font-bold uppercase bg-emerald-600 text-white px-2 py-0.5 rounded-full'
+        : access.role === 'region_editor'
+            ? 'text-[10px] font-bold uppercase bg-blue-600 text-white px-2 py-0.5 rounded-full'
+            : 'text-[10px] font-bold uppercase bg-slate-700 text-slate-100 px-2 py-0.5 rounded-full';
+
+    regionBadge.textContent = access.regionKey || 'all';
+    
+    // Handle sign-in form visibility
+    // Note: formContainer visibility is controlled only by toggleAuthForm
+    // renderAccessPanel controls toggle button and sign-out button only
+    if (toggleFormBtn && signOutBtn) {
+        const isAuthenticated = access.isAuthenticated;
+        toggleFormBtn.classList.toggle('hidden', isAuthenticated);
+        signOutBtn.classList.toggle('hidden', !isAuthenticated);
+        if (changePasswordBtn) {
+            changePasswordBtn.classList.toggle('hidden', !isAuthenticated);
+        }
+    }
+    // Reset form to hidden if somehow still visible when authenticated
+    if (formContainer && access.isAuthenticated && !formContainer.classList.contains('hidden')) {
+        formContainer.classList.add('hidden');
+    }
+
+    if (openUserAdminBtn) {
+        const showForAdmin = access.isAuthenticated && access.role === 'admin';
+        openUserAdminBtn.classList.toggle('hidden', !showForAdmin);
+    }
+
+    const canEdit = canEditCurrentRegion();
+    if (addDpBtn) {
+        addDpBtn.disabled = !canEdit;
+        addDpBtn.classList.toggle('opacity-50', !canEdit);
+        addDpBtn.classList.toggle('cursor-not-allowed', !canEdit);
+    }
+
+    if (resetBtn) {
+        const isAdmin = access.role === 'admin';
+        resetBtn.disabled = !isAdmin;
+        resetBtn.classList.toggle('opacity-50', !isAdmin);
+        resetBtn.classList.toggle('cursor-not-allowed', !isAdmin);
+    }
 }
 
 function updateBrushStatusUi() {
@@ -75,6 +441,15 @@ function updateWorkflowChips(totalRegionalFte, assignedRegionalFte) {
 function updateEditLockUi() {
     const lockBtn = document.getElementById('edit-lock-btn');
     if (!lockBtn) return;
+
+    if (!canEditCurrentRegion()) {
+        lockBtn.textContent = 'Režim úprav: Nedostupný';
+        lockBtn.className = 'w-full bg-slate-200 text-slate-500 text-[11px] font-bold py-2 rounded-lg cursor-not-allowed';
+        lockBtn.disabled = true;
+        return;
+    }
+
+    lockBtn.disabled = false;
 
     if (editModeLocked) {
         lockBtn.textContent = 'Režim úprav: Vypnutý';
@@ -296,6 +671,11 @@ function clearActiveWorkplace() {
 }
 
 function toggleEditLock() {
+    if (!canEditCurrentRegion()) {
+        showToast('Nemáte oprávnenie upravovať tento kraj.', 'warning');
+        return;
+    }
+
     editModeLocked = !editModeLocked;
     redrawUiAndStats();
     showToast(editModeLocked ? 'Režim úprav bol vypnutý.' : 'Režim úprav bol zapnutý.', 'info');
@@ -327,6 +707,11 @@ function submitCustomPrompt() {
 }
 
 function openAddDPPrompt() {
+    if (!canEditCurrentRegion()) {
+        showToast('Nemáte oprávnenie upravovať tento kraj.', 'warning');
+        return;
+    }
+
     if (editModeLocked) {
         showToast('Režim úprav je vypnutý.', 'warning');
         return;
@@ -341,8 +726,8 @@ function openAddDPPrompt() {
             if (!name) return;
             
             const id = "wp-" + Date.now();
-            const color = colorPalette[colorIndex % colorPalette.length];
-            colorIndex++;
+            const color = colorPalette[window.colorIndex % colorPalette.length];
+            window.colorIndex++;
 
             customWorkplaces[id] = {
                 id: id,
@@ -369,6 +754,11 @@ function openAddDPPrompt() {
 }
 
 function removeWorkplace(id) {
+    if (!canEditCurrentRegion()) {
+        showToast('Nemáte oprávnenie upravovať tento kraj.', 'warning');
+        return;
+    }
+
     if (editModeLocked) {
         showToast('Režim úprav je vypnutý.', 'warning');
         return;
@@ -413,6 +803,12 @@ function removeWorkplace(id) {
 }
 
 function editDistrictFte(districtName) {
+    const regionKey = getRegionKeyForDistrict(districtName);
+    if (typeof canCurrentUserEditRegion === 'function' && !canCurrentUserEditRegion(regionKey)) {
+        showToast('Nemáte oprávnenie upravovať tento kraj.', 'warning');
+        return;
+    }
+
     if (editModeLocked) {
         showToast('Režim úprav je vypnutý.', 'warning');
         return;
@@ -454,6 +850,7 @@ function editDistrictFte(districtName) {
 
 function redrawUiAndStats() {
     updateDashboardWidgets();
+    renderAccessPanel();
     updateBrushStatusUi();
     updateEditLockUi();
     updateDistrictFilterOptions();
@@ -527,6 +924,7 @@ function renderLeftWorkplaceList() {
     listContainer.innerHTML = '';
 
     const activeDps = Object.values(customWorkplaces).filter(wp => wp.regionKey === currentRegionKey);
+    const canEdit = canEditCurrentRegion();
 
     if (activeDps.length === 0) {
         listContainer.innerHTML = `
@@ -584,6 +982,15 @@ function renderLeftWorkplaceList() {
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
         `;
+
+        if (!canEdit) {
+            const removeBtn = itemDiv.querySelector('button');
+            if (removeBtn) {
+                removeBtn.disabled = true;
+                removeBtn.classList.add('opacity-40', 'cursor-not-allowed');
+            }
+        }
+
         listContainer.appendChild(itemDiv);
     });
 }
@@ -591,6 +998,7 @@ function renderLeftWorkplaceList() {
 function renderRightCapacityList() {
     const container = document.getElementById('district-capacity-list');
     container.innerHTML = '';
+    const canEdit = canEditCurrentRegion();
 
     const modeFilterEl = document.getElementById('district-filter-mode');
     if (modeFilterEl) districtFilterMode = modeFilterEl.value;
@@ -665,10 +1073,18 @@ function renderRightCapacityList() {
                 <span class="text-[10px] text-slate-400 block font-mono font-bold">Základná kapacita: <strong class="text-slate-600">${dist.fte} FTE</strong></span>
                 ${muniHtml}
             </div>
-            <button onclick="editDistrictFte('${dist.name}')" class="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-brand-500 border border-slate-200 p-2 rounded-lg transition-colors shrink-0">
+            <button onclick="editDistrictFte('${dist.name}')" class="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-brand-500 border border-slate-200 p-2 rounded-lg transition-colors shrink-0" ${canEdit ? '' : 'disabled'}>
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
             </button>
         `;
+
+        if (!canEdit) {
+            const editBtn = block.querySelector('button');
+            if (editBtn) {
+                editBtn.classList.add('opacity-40', 'cursor-not-allowed');
+            }
+        }
+
         container.appendChild(block);
     });
 }

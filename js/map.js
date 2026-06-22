@@ -434,12 +434,16 @@ function refreshMapLayerState() {
 }
 
 function handleDistrictClick(districtName) {
+    const rKey = getRegionKeyForDistrict(districtName);
+    if (typeof canCurrentUserEditRegion === 'function' && !canCurrentUserEditRegion(rKey)) {
+        showToast('Nemáte oprávnenie upravovať tento kraj.', 'warning');
+        return;
+    }
+
     if (editModeLocked) {
         showToast('Režim úprav je vypnutý.', 'warning');
         return;
     }
-
-    const rKey = getRegionKeyForDistrict(districtName);
 
     if (rKey !== currentRegionKey) {
         openPromptModal(

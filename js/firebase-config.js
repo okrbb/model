@@ -20,3 +20,22 @@ window.FIREBASE_SYNC_OPTIONS = {
     // Keep null to allow all regions.
     regionLock: null
 };
+
+// Optional auth and authorization behavior.
+window.FIREBASE_AUTH_OPTIONS = {
+    // Set false to keep legacy open editing mode without signed-in users.
+    enabled: true,
+
+    // If true, the app asks users to sign in. If false, anonymous read-only fallback is allowed.
+    requireSignIn: false,
+
+    // Supported: 'email'.
+    provider: 'email',
+
+    // Default role when custom claims are missing.
+    defaultRole: 'viewer',
+
+    // Custom claim keys used by backend role assignment.
+    claimRoleKey: 'role',
+    claimRegionKey: 'regionKey'
+};

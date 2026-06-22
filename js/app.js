@@ -7,7 +7,7 @@ let offlineModeActive = false;
 
 let districtData = getDefaultDistrictData(); // Uses function from data.js
 let customWorkplaces = {};
-let colorIndex = 0;
+window.colorIndex = 0;
 let editModeLocked = false;
 let actionHistory = [];
 let districtFilterMode = 'all';
@@ -453,33 +453,58 @@ async function executeMapPngExport(exportWhole) {
 }
 
 function resetModelData() {
+    if (typeof canCurrentUserEditAny === 'function' && !canCurrentUserEditAny()) {
+        if (typeof showToast === 'function') {
+            showToast('Reset je povolený iba pre administrátora.', 'warning');
+        }
+        return;
+    }
+
     openConfirmModal(
-        'Reset modelu',
-        'Naozaj chcete resetovať celú mapu a všetky detašované pracoviská? Táto akcia sa nedá vrátiť.',
+        'POZOR: FINÁLNY RESET MAPY',
+        '⚠️ TÁTO AKCIA JE NEVRATNÁ! ⚠️\n\nZadaním "ÁNO" vymažete:\n• Všetky detašované pracoviská (DP)\n• Všetky priradenia okresov\n• Všetky zmeny od začiatku\n\nPokračovať?',
         function (confirmed) {
             if (!confirmed) return;
 
-        customWorkplaces = {};
-        districtData = getDefaultDistrictData();
-        activeWorkplaceId = null;
-        actionHistory = [];
-        if (offlineModeActive) {
-            drawOfflineNodeMap();
-        } else if (geojsonLayer) {
-            refreshMapLayerState();
-        }
-        currentRegionKey = 'slovakia';
-        recenterToSlovakia();
-        redrawUiAndStats();
+            // Second step: ask user to type confirmation
+            openPromptModal(
+                'Posledné potvrdenie',
+                'Zadajte "ÁNO" (bez úvodzoviek) aby ste potvrdili trvalý reset mapy:',
+                'text',
+                '',
+                function (userInput) {
+                    if (userInput?.trim().toUpperCase() !== 'ÁNO') {
+                        if (typeof showToast === 'function') {
+                            showToast('Reset bol zrušený - text sa nezhodoval.', 'info');
+                        }
+                        return;
+                    }
 
-        if (typeof scheduleSaveForAllRegions === 'function') {
-            scheduleSaveForAllRegions();
-        }
+                    // Perform actual reset
+                    customWorkplaces = {};
+                    districtData = getDefaultDistrictData();
+                    activeWorkplaceId = null;
+                    actionHistory = [];
+                    window.colorIndex = 0;
+                    if (offlineModeActive) {
+                        drawOfflineNodeMap();
+                    } else if (geojsonLayer) {
+                        refreshMapLayerState();
+                    }
+                    currentRegionKey = 'slovakia';
+                    recenterToSlovakia();
+                    redrawUiAndStats();
 
-        openPromptModal('Reset dokončený', 'Mapa bola resetovaná na pôvodný stav.', 'info');
-        showToast('Model bol resetovaný.', 'warning');
+                    if (typeof scheduleSaveForAllRegions === 'function') {
+                        scheduleSaveForAllRegions();
+                    }
+
+                    openPromptModal('Reset dokončený', 'Mapa bola úplne resetovaná na pôvodný stav. Všetky dáta boli vymazané.', 'info');
+                    showToast('Model bol úplne resetovaný. Všetky zmeny boli ZMAZANÉ.', 'warning');
+                }
+            );
         },
-        'Resetovať',
+        'Pokračovať',
         'Zrušiť'
     );
 }
@@ -499,11 +524,19 @@ window.onload = async function () {
         }
 
         if (synced && typeof loadAllRegionsFromCloud === 'function') {
-            await loadAllRegionsFromCloud({ silent: true, skipRedraw: true });
+            await loadAllRegionsFromCloud({ silent: true, skipRedraw: false });
         }
     }
 
     initModelerMap();
+
+    if (typeof getRegionLockKey === 'function' && typeof recenterToSelectedRegion === 'function') {
+        const lockedRegion = getRegionLockKey();
+        if (lockedRegion) {
+            recenterToSelectedRegion();
+        }
+    }
+
     redrawUiAndStats();
 
     if (typeof isFirebaseSyncEnabled === 'function' && isFirebaseSyncEnabled()) {

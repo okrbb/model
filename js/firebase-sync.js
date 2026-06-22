@@ -3,6 +3,7 @@
 const firebaseSyncState = {
     enabled: false,
     db: null,
+    auth: null,
     options: {
         collectionName: 'okr_region_models',
         districtMetaCollectionName: 'district_meta',
@@ -10,11 +11,33 @@ const firebaseSyncState = {
         regionLock: null,
         clientId: `web-${Math.random().toString(36).slice(2, 8)}`
     },
+    authOptions: {
+        enabled: true,
+        requireSignIn: false,
+        provider: 'google',
+        defaultRole: 'viewer',
+        claimRoleKey: 'role',
+        claimRegionKey: 'regionKey'
+    },
+    access: {
+        initialized: false,
+        user: null,
+        role: 'viewer',
+        regionKey: null,
+        isAuthenticated: false,
+        canEditAny: false
+    },
+    accessListeners: [],
     saveTimers: {},
     saveInFlight: {}
 };
 
 const FIREBASE_DATASET_SEED_VERSION = 1;
+const ACCESS_ROLES = {
+    ADMIN: 'admin',
+    REGION_EDITOR: 'region_editor',
+    VIEWER: 'viewer'
+};
 
 function getFirebaseConfigFromWindow() {
     return window.FIREBASE_CONFIG || null;
@@ -32,8 +55,80 @@ function mergeFirebaseOptions(customOptions) {
     };
 }
 
+function mergeFirebaseAuthOptions(customOptions) {
+    firebaseSyncState.authOptions = {
+        ...firebaseSyncState.authOptions,
+        ...(customOptions || {})
+    };
+}
+
+function normalizeAccessRole(rawRole) {
+    const role = String(rawRole || '').trim().toLowerCase();
+    if (role === ACCESS_ROLES.ADMIN) return ACCESS_ROLES.ADMIN;
+    if (role === ACCESS_ROLES.REGION_EDITOR) return ACCESS_ROLES.REGION_EDITOR;
+    return ACCESS_ROLES.VIEWER;
+}
+
+function computeAccessContext(user, claims = {}) {
+    const roleKey = firebaseSyncState.authOptions.claimRoleKey || 'role';
+    const regionKeyField = firebaseSyncState.authOptions.claimRegionKey || 'regionKey';
+    const fallbackRole = firebaseSyncState.authOptions.defaultRole || ACCESS_ROLES.VIEWER;
+
+    const role = normalizeAccessRole(claims[roleKey] || fallbackRole);
+    const regionKey = claims[regionKeyField] ? String(claims[regionKeyField]) : null;
+
+    return {
+        initialized: true,
+        user: user || null,
+        uid: user?.uid || null,
+        email: user?.email || null,
+        role,
+        regionKey,
+        isAuthenticated: Boolean(user),
+        canEditAny: role === ACCESS_ROLES.ADMIN
+    };
+}
+
+function notifyAccessListeners() {
+    firebaseSyncState.accessListeners.forEach((cb) => {
+        try {
+            cb({ ...firebaseSyncState.access });
+        } catch (err) {
+            console.warn('Access listener failed', err);
+        }
+    });
+}
+
+function setAccessContext(user, claims = {}) {
+    firebaseSyncState.access = computeAccessContext(user, claims);
+    notifyAccessListeners();
+}
+
+function getCurrentAccessContext() {
+    return { ...firebaseSyncState.access };
+}
+
+function canCurrentUserEditAny() {
+    return firebaseSyncState.access.role === ACCESS_ROLES.ADMIN;
+}
+
+function canCurrentUserEditRegion(regionKey) {
+    const role = firebaseSyncState.access.role;
+    if (role === ACCESS_ROLES.ADMIN) return true;
+    if (role !== ACCESS_ROLES.REGION_EDITOR) return false;
+    if (!regionKey || regionKey === 'slovakia') return false;
+    return firebaseSyncState.access.regionKey === regionKey;
+}
+
+function getAccessRegionLockKey() {
+    if (firebaseSyncState.access.role === ACCESS_ROLES.REGION_EDITOR && firebaseSyncState.access.regionKey) {
+        return firebaseSyncState.access.regionKey;
+    }
+    return null;
+}
+
 function getRegionLockKey() {
-    return firebaseSyncState.options.regionLock || null;
+    return getAccessRegionLockKey() || firebaseSyncState.options.regionLock || null;
 }
 
 function getAllowedRegionKeys() {
@@ -44,6 +139,16 @@ function getAllowedRegionKeys() {
 
 function isFirebaseSyncEnabled() {
     return firebaseSyncState.enabled;
+}
+
+function isFirebaseAuthEnabled() {
+    return Boolean(firebaseSyncState.authOptions.enabled);
+}
+
+function shouldBlockWritesForAuth() {
+    if (!isFirebaseAuthEnabled()) return false;
+    if (firebaseSyncState.authOptions.requireSignIn && !firebaseSyncState.access.isAuthenticated) return true;
+    return false;
 }
 
 function getFirebaseDatasetSeedVersion() {
@@ -58,6 +163,10 @@ function getRegionDocRef(regionKey) {
 
 function getDistrictMetaCollectionRef() {
     return firebaseSyncState.db.collection(firebaseSyncState.options.districtMetaCollectionName);
+}
+
+function getUsersCollectionRef() {
+    return firebaseSyncState.db.collection('users');
 }
 
 function encodeDistrictMetaDocId(norm) {
@@ -150,6 +259,8 @@ function applyRegionPayload(regionKey, payload) {
 async function saveRegionToCloud(regionKey) {
     if (!isFirebaseSyncEnabled()) return;
     if (!regionKey || regionKey === 'slovakia') return;
+    if (shouldBlockWritesForAuth()) return;
+    if (!canCurrentUserEditRegion(regionKey)) return;
 
     const lock = getRegionLockKey();
     if (lock && regionKey !== lock) return;
@@ -173,6 +284,8 @@ async function saveRegionToCloud(regionKey) {
 function scheduleRegionSave(regionKey) {
     if (!isFirebaseSyncEnabled()) return;
     if (!regionKey || regionKey === 'slovakia') return;
+    if (shouldBlockWritesForAuth()) return;
+    if (!canCurrentUserEditRegion(regionKey)) return;
 
     const lock = getRegionLockKey();
     if (lock && regionKey !== lock) return;
@@ -241,6 +354,22 @@ async function loadAllRegionsFromCloud(options = {}) {
         await loadRegionFromCloud(regionKey, { ...options, skipRedraw: true, silent: true });
     }
 
+    // Sync colorIndex after all regions are loaded
+    if (typeof colorPalette !== 'undefined' && colorPalette.length > 0) {
+        let maxUsedIndex = -1;
+        Object.values(customWorkplaces).forEach((wp) => {
+            if (wp?.color) {
+                const idx = colorPalette.indexOf(wp.color);
+                if (idx > maxUsedIndex) {
+                    maxUsedIndex = idx;
+                }
+            }
+        });
+        if (typeof window !== 'undefined' && 'colorIndex' in window) {
+            window.colorIndex = maxUsedIndex + 1;
+        }
+    }
+
     if (!options.skipRedraw && typeof redrawUiAndStats === 'function') {
         redrawUiAndStats();
     }
@@ -251,6 +380,8 @@ async function loadAllRegionsFromCloud(options = {}) {
 async function ensureRegionInCloud(regionKey, options = {}) {
     if (!isFirebaseSyncEnabled()) return false;
     if (!regionKey || regionKey === 'slovakia') return false;
+    if (shouldBlockWritesForAuth()) return false;
+    if (!canCurrentUserEditRegion(regionKey)) return false;
 
     const lock = getRegionLockKey();
     if (lock && regionKey !== lock) return false;
@@ -351,6 +482,10 @@ async function backfillDistrictMetaToCloud(counts, options = {}) {
         return { updated: 0, total: 0, skipped: true };
     }
 
+    if (!canCurrentUserEditAny()) {
+        return { updated: 0, total: 0, skipped: true };
+    }
+
     if (!firebaseSyncState.options.autoBackfillDistrictMeta && !options.force) {
         return { updated: 0, total: 0, skipped: true };
     }
@@ -424,20 +559,200 @@ async function backfillDistrictMetaToCloud(counts, options = {}) {
 
 function applyRegionLockUi() {
     const lock = getRegionLockKey();
-    if (!lock) return;
-
-    currentRegionKey = lock;
-
     const selector = document.getElementById('active-region-selector');
-    if (selector) {
+    if (selector && lock) {
+        const needsRegionSwitch = currentRegionKey !== lock;
         selector.value = lock;
         selector.disabled = true;
         selector.classList.add('opacity-70', 'cursor-not-allowed');
+        currentRegionKey = lock;
+
+        if (needsRegionSwitch && typeof changeRegion === 'function') {
+            Promise.resolve(changeRegion()).catch((err) => {
+                console.warn('Auto region switch after lock failed', err);
+            });
+        } else if (needsRegionSwitch && typeof recenterToSelectedRegion === 'function') {
+            recenterToSelectedRegion();
+        }
+
+        if (needsRegionSwitch && typeof showToast === 'function') {
+            showToast(`Automaticky prepnuté na kraj ${regionMeta[lock]?.seat || lock}.`, 'info');
+        }
+
+        return;
+    }
+
+    if (selector && !lock) {
+        selector.disabled = false;
+        selector.classList.remove('opacity-70', 'cursor-not-allowed');
+    }
+}
+
+async function refreshAccessFromUser(user) {
+    if (!user) {
+        setAccessContext(null, {});
+        return;
+    }
+
+    try {
+        // Read user role from Firestore instead of auth token
+        if (firebaseSyncState.db) {
+            const userDocRef = firebaseSyncState.db.collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
+            const userRoleData = userDoc.data() || {};
+            
+            // Pass Firestore data as claims for compatibility with existing code
+            setAccessContext(user, {
+                role: userRoleData.role || 'viewer',
+                regionKey: userRoleData.regionKey || null
+            });
+        } else {
+            // Fallback if DB not initialized
+            setAccessContext(user, { role: 'viewer' });
+        }
+    } catch (err) {
+        console.error('Failed to read user role from Firestore', err);
+        // Fallback to viewer role if read fails
+        setAccessContext(user, { role: 'viewer' });
+    }
+}
+
+async function requestFirebaseSignIn(email, password) {
+    if (!firebaseSyncState.auth) return false;
+    
+    if (!email || !password) {
+        if (typeof showToast === 'function') {
+            showToast('Email a heslo sú povinné.', 'warning');
+        }
+        return false;
+    }
+
+    try {
+        await firebaseSyncState.auth.signInWithEmailAndPassword(email, password);
+        return true;
+    } catch (err) {
+        console.error('Firebase sign in failed', err);
+        let msg = 'Prihlásenie zlyhalo.';
+        if (err.code === 'auth/user-not-found') {
+            msg = 'Používateľ nenájdený.';
+        } else if (err.code === 'auth/wrong-password') {
+            msg = 'Nesprávne heslo.';
+        } else if (err.code === 'auth/invalid-email') {
+            msg = 'Neplatný email.';
+        }
+        if (typeof showToast === 'function') {
+            showToast(msg, 'warning');
+        }
+        return false;
+    }
+}
+
+async function requestFirebaseSignOut() {
+    if (!firebaseSyncState.auth) return false;
+    try {
+        await firebaseSyncState.auth.signOut();
+        return true;
+    } catch (err) {
+        console.error('Firebase sign out failed', err);
+        return false;
+    }
+}
+
+async function requestFirebasePasswordChange(currentPassword, newPassword) {
+    if (!firebaseSyncState.auth || !firebase.auth?.EmailAuthProvider) return { ok: false, code: 'auth/not-available' };
+
+    const user = firebaseSyncState.auth.currentUser;
+    if (!user || !user.email) return { ok: false, code: 'auth/no-current-user' };
+
+    const current = String(currentPassword || '').trim();
+    const next = String(newPassword || '');
+
+    if (!current || !next) return { ok: false, code: 'auth/missing-password' };
+    if (next.length < 8) return { ok: false, code: 'auth/weak-password' };
+
+    try {
+        const credential = firebase.auth.EmailAuthProvider.credential(user.email, current);
+        await user.reauthenticateWithCredential(credential);
+        await user.updatePassword(next);
+        return { ok: true };
+    } catch (err) {
+        console.error('Firebase password change failed', err);
+        return { ok: false, code: err?.code || 'auth/unknown' };
+    }
+}
+
+async function listFirebaseUsers() {
+    if (!isFirebaseSyncEnabled() || !firebaseSyncState.db) return [];
+    if (!canCurrentUserEditAny()) return [];
+
+    try {
+        const snapshot = await getUsersCollectionRef().orderBy('email').get();
+        const users = [];
+        snapshot.forEach((doc) => {
+            const data = doc.data() || {};
+            users.push({
+                uid: doc.id,
+                email: data.email || '',
+                role: normalizeAccessRole(data.role || ACCESS_ROLES.VIEWER),
+                regionKey: data.regionKey ? String(data.regionKey) : null,
+                updatedBy: data.updatedBy || null,
+                updatedAt: data.updatedAt || null
+            });
+        });
+        return users;
+    } catch (err) {
+        console.error('Firebase users load failed', err);
+        return [];
+    }
+}
+
+async function updateFirebaseUserAccess(uid, payload = {}) {
+    if (!isFirebaseSyncEnabled() || !firebaseSyncState.db) return false;
+    if (!canCurrentUserEditAny()) return false;
+    if (!uid) return false;
+
+    if (firebaseSyncState.access.uid && uid === firebaseSyncState.access.uid) {
+        console.warn('Self role change blocked for current admin user');
+        return false;
+    }
+
+    const role = normalizeAccessRole(payload.role || ACCESS_ROLES.VIEWER);
+    const regionKey = role === ACCESS_ROLES.REGION_EDITOR
+        ? (payload.regionKey ? String(payload.regionKey) : null)
+        : null;
+
+    try {
+        await getUsersCollectionRef().doc(uid).set({
+            role,
+            regionKey,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: firebaseSyncState.access.uid || firebaseSyncState.options.clientId
+        }, { merge: true });
+
+        if (firebaseSyncState.access.uid === uid && firebaseSyncState.auth?.currentUser) {
+            await refreshAccessFromUser(firebaseSyncState.auth.currentUser);
+        }
+
+        return true;
+    } catch (err) {
+        console.error('Firebase user update failed', err);
+        return false;
+    }
+}
+
+function subscribeAccessContext(listener) {
+    if (typeof listener !== 'function') return function () {};
+    firebaseSyncState.accessListeners.push(listener);
+    listener(getCurrentAccessContext());
+
+    return function unsubscribe() {
+        firebaseSyncState.accessListeners = firebaseSyncState.accessListeners.filter(cb => cb !== listener);
     }
 }
 
 async function initFirebaseSync() {
     mergeFirebaseOptions(window.FIREBASE_SYNC_OPTIONS || {});
+    mergeFirebaseAuthOptions(window.FIREBASE_AUTH_OPTIONS || {});
 
     const cfg = getFirebaseConfigFromWindow();
     if (!hasUsableFirebaseConfig(cfg)) {
@@ -457,6 +772,19 @@ async function initFirebaseSync() {
 
         firebaseSyncState.db = firebase.firestore();
         firebaseSyncState.enabled = true;
+
+        if (firebase.auth && isFirebaseAuthEnabled()) {
+            firebaseSyncState.auth = firebase.auth();
+            firebaseSyncState.auth.onAuthStateChanged(async (user) => {
+                await refreshAccessFromUser(user);
+                applyRegionLockUi();
+                if (typeof redrawUiAndStats === 'function') {
+                    redrawUiAndStats();
+                }
+            });
+        } else {
+            setAccessContext(null, { role: ACCESS_ROLES.ADMIN });
+        }
 
         window.addEventListener('beforeunload', function () {
             flushPendingRegionSaves();
@@ -483,3 +811,12 @@ window.ensureRegionInCloud = ensureRegionInCloud;
 window.ensureAllRegionsInCloud = ensureAllRegionsInCloud;
 window.getFirebaseDatasetSeedVersion = getFirebaseDatasetSeedVersion;
 window.loadDistrictMetaFromCloud = loadDistrictMetaFromCloud;
+window.getCurrentAccessContext = getCurrentAccessContext;
+window.canCurrentUserEditAny = canCurrentUserEditAny;
+window.canCurrentUserEditRegion = canCurrentUserEditRegion;
+window.requestFirebaseSignIn = requestFirebaseSignIn;
+window.requestFirebaseSignOut = requestFirebaseSignOut;
+window.requestFirebasePasswordChange = requestFirebasePasswordChange;
+window.subscribeAccessContext = subscribeAccessContext;
+window.listFirebaseUsers = listFirebaseUsers;
+window.updateFirebaseUserAccess = updateFirebaseUserAccess;

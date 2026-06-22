@@ -62,6 +62,30 @@
         </div>
         
         <div class="flex items-center space-x-3">
+            <div id="access-panel" class="hidden sm:flex items-center gap-2 bg-slate-900/60 px-3 py-2 rounded-xl border border-slate-800">
+                <span id="access-role-badge" class="text-[10px] font-bold uppercase bg-slate-700 text-slate-100 px-2 py-0.5 rounded-full">viewer</span>
+                <span id="access-region-badge" class="text-[10px] font-bold uppercase text-slate-300">all</span>
+                
+                <!-- Sign-in form (hidden when logged in) -->
+                <div id="auth-form-container" class="flex gap-2 items-center hidden">
+                    <input type="email" id="auth-email-input" placeholder="email@minv.sk" class="text-sm px-3 py-2 rounded bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-48">
+                    <input type="password" id="auth-password-input" placeholder="heslo" class="text-sm px-3 py-2 rounded bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-36">
+                    <button id="auth-sign-in-btn" onclick="handleEmailSignIn()" class="text-[10px] font-bold uppercase bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded whitespace-nowrap">Prihlásiť</button>
+                </div>
+                
+                <!-- Sign-out button (shown when logged in) -->
+                <button id="auth-sign-out-btn" onclick="requestFirebaseSignOut()" class="text-[10px] font-bold uppercase bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded hidden">Odhlásiť</button>
+
+                <!-- Password change button (shown when logged in) -->
+                <button id="auth-change-password-btn" onclick="openPasswordModal()" class="text-[10px] font-bold uppercase bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded hidden">Heslo</button>
+                
+                <!-- Toggle form button (shown when not logged in) -->
+                <button id="auth-toggle-form-btn" onclick="toggleAuthForm()" class="text-[10px] font-bold uppercase bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded">Prihlásiť</button>
+
+                <!-- Admin-only users management -->
+                <button id="open-user-admin-btn" onclick="openUserAdminModal()" class="text-[10px] font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded hidden">Užívatelia</button>
+            </div>
+
             <button onclick="openGuideModal()" class="bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/30 text-brand-100 hover:text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors uppercase tracking-wide">
                 Návod
             </button>
@@ -81,7 +105,7 @@
         <section class="w-full lg:w-80 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 p-5 flex flex-col shrink-0 overflow-y-auto custom-scrollbar space-y-6">
             
             <div>
-                <label for="active-region-selector" class="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2 font-mono">1. Zvolte aktívny kraj:</label>
+                <label for="active-region-selector" class="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2 font-mono">Zvolte aktívny kraj:</label>
                 <select id="active-region-selector" onchange="changeRegion()" class="w-full bg-slate-100 border border-slate-300 focus:border-brand-500 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none transition-all cursor-pointer">
                     <option value="slovakia">Slovenská republika</option>
                     <option value="banska-bystrica">Banskobystrický kraj</option>
@@ -95,20 +119,12 @@
                 </select>
             </div>
 
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <span class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2 font-mono">Postup práce:</span>
-                <div class="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-wide">
-                    <span id="step-chip-1" class="px-2 py-1 rounded-lg border text-center">1. Kraj</span>
-                    <span id="step-chip-2" class="px-2 py-1 rounded-lg border text-center">2. DP</span>
-                    <span id="step-chip-3" class="px-2 py-1 rounded-lg border text-center">3. Priradenie</span>
-                    <span id="step-chip-4" class="px-2 py-1 rounded-lg border text-center">4. Kontrola</span>
-                </div>
-            </div>
+
 
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
-                    <label class="text-xs font-black text-slate-500 uppercase tracking-wider font-mono">2. Detašované pracoviská (DP):</label>
-                    <button onclick="openAddDPPrompt()" class="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-500/10 flex items-center space-x-1">
+                    <label class="text-xs font-black text-slate-500 uppercase tracking-wider font-mono">Detašované pracoviská (DP):</label>
+                    <button id="add-dp-btn" onclick="openAddDPPrompt()" class="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-500/10 flex items-center space-x-1">
                         <span>+ PRIDAŤ DP</span>
                     </button>
                 </div>
@@ -119,8 +135,7 @@
                         <span id="active-brush-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 uppercase">Žiadny</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="clear-brush-btn" onclick="clearActiveWorkplace()" class="flex-1 bg-white border border-slate-300 text-slate-700 text-[11px] font-bold py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">Vypnúť štetec</button>
-                        <button id="undo-action-btn" onclick="undoLastAction()" class="flex-1 bg-white border border-slate-300 text-slate-700 text-[11px] font-bold py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">Vrátiť posledné</button>
+                        <button id="undo-action-btn" onclick="undoLastAction()" class="w-full bg-white border border-slate-300 text-slate-700 text-[11px] font-bold py-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">Vrátiť posledné</button>
                     </div>
                     <button id="edit-lock-btn" onclick="toggleEditLock()" class="w-full bg-slate-900 text-white text-[11px] font-bold py-2 rounded-lg">Režim úprav: Zapnutý</button>
                 </div>
@@ -129,10 +144,10 @@
                     </div>
                 
                 <div class="pt-3">
-                    <label class="block text-xs font-black text-slate-500 uppercase tracking-wider font-mono mb-2">3. Akcie a správa dát:</label>
+                    <label class="block text-xs font-black text-slate-500 uppercase tracking-wider font-mono mb-2">Akcie a správa dát:</label>
                     <div class="flex items-center space-x-3">
                         <button onclick="exportMapAsPng()" class="flex-1 bg-white border border-slate-200 text-slate-700 text-xs font-bold py-3 px-4 rounded-xl">Export PNG</button>
-                        <button onclick="resetModelData()" class="flex-1 bg-red-50 border border-red-200 text-red-700 text-xs font-bold py-3 px-4 rounded-xl hover:bg-red-100 transition-colors">Reset</button>
+                        <button id="reset-model-btn" onclick="resetModelData()" class="flex-1 bg-red-50 border border-red-200 text-red-700 text-xs font-bold py-3 px-4 rounded-xl hover:bg-red-100 transition-colors">Reset</button>
                     </div>
                 </div>
             </div>
@@ -290,9 +305,9 @@
 
                 <section class="bg-white border border-slate-200 rounded-2xl p-4">
                     <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">3. Pridanie DP a práca so štetcom</h4>
-                    <p>Tlačidlom + PRIDAŤ DP vytvoríš nové detašované pracovisko. Každé DP má vlastnú farbu a objaví sa v zozname vlavo.</p>
-                    <p class="mt-2">Aktivácia štetca: klikni na DP v zozname. Aktívne DP je zvýraznené. Opätovným kliknutím na rovnaké DP štetec vypneš.</p>
-                    <p class="mt-2">Odstránenie DP: ikona koša pri danom DP. Tlačidlom Vrátiť posledné obnovíš poslednú zmenu.</p>
+                    <p>Tlačidlom <strong>+ PRIDAŤ DP</strong> vytvoríš nové detašované pracovisko. Každé DP má vlastnú farbu (automaticky priradenú) a objaví sa v zozname vlavo. Farby sa nemôžu opakovať v rámci kraja.</p>
+                    <p class="mt-2"><strong>Aktivácia štetca:</strong> Klikni na DP v zozname. Aktívne DP je zvýraznené - s tým DP môžeš teraz pridávať okresy na mape. Opätovným kliknutím na rovnaké DP štetec vypneš.</p>
+                    <p class="mt-2"><strong>Odstránenie DP:</strong> Ikona koša pri danom DP. Tlačidlom <strong>Vrátiť posledné</strong> obnovíš poslednú zmenu.</p>
                 </section>
 
                 <section class="bg-white border border-slate-200 rounded-2xl p-4">
@@ -314,9 +329,12 @@
                 </section>
 
                 <section class="bg-red-50 border border-red-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-red-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">7. Resetovanie modelu</h4>
-                    <p>Reset vráti model do východzieho stavu, odstráni všetky vlastné DP a zruší všetky priradenia. Akcia je nevratná.</p>
-                    <p class="mt-2">Po resetovaní sa aplikácia prepne na Slovenská republika. Zmena sa zaznamená v Firebase databáze.</p>
+                    <h4 class="font-extrabold text-red-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">7. Resetovanie modelu (iba Admin)</h4>
+                    <p><strong>⚠️ POZOR:</strong> Reset je <strong>TRVALÝ A NEVRATNÝ</strong> - zmaže všetky detašované pracoviská, priradenia a zmeny!</p>
+                    <p class="mt-2">Reset je dostupný iba pre administrátorov. Po kliknutí na tlačidlo <strong>Reset</strong> sa zobrazí dvoj-stupňové potvrdzovanie:</p>
+                    <p class="mt-2"><strong>1. Krok:</strong> Potvrdzovací dialóg s podrobným varovním. Musíš kliknúť "Pokračovať".</p>
+                    <p class="mt-2"><strong>2. Krok:</strong> Zadaj text "ÁNO" (bez úvodzoviek) aby si potvrdil finálny reset. Bez presného textu sa reset neuskutoční.</p>
+                    <p class="mt-2">Po úspešnom resetovaní sa aplikácia vráti do pôvodného stavu - celá mapa sa vymaže.</p>
                 </section>
 
                 <section class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
@@ -325,6 +343,90 @@
                     <p class="mt-2">Zmeny sa synchronizujú bez oneskorenia - keď upravíš kapacitu, pridáš alebo odoberieš DP, alebo priradíš okres, zmena sa v pozadí uloží do databázy.</p>
                     <p class="mt-2">Pracuj po krokoch: výber kraja -> vytvorenie DP -> priraďovanie okresov -> jemné ladenie FTE. Vždy máš aktuálny základ v databáze.</p>
                 </section>
+
+                <section class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                    <h4 class="font-extrabold text-amber-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">9. Prihlasovanie a autentifikácia</h4>
+                    <p><strong>Prezeranie bez prihlásenia:</strong> Všetci používatelia (aj bez prihlásenia) mogú vidieť všetky vytvorené DP a modely na mape. Úpravy (vytvorenie nového DP, priraďovanie okresov) vyžadujú prihlásenie.</p>
+                    <p class="mt-2"><strong>Prihlásenie:</strong> Klikni na tlačidlo <strong>Prihlásiť</strong> v pravom hornom rohu, zadaj svoj firemný email a heslo. Po úspešnom prihlásení sa v hornom rohu zobrazí tvoja rola a región (ak si pridelený).</p>
+                    <p class="mt-2"><strong>Zmena hesla:</strong> Klikni na tlačidlo <strong>Zmeniť heslo</strong> (viditeľné po prihlásení). Zadaj aktuálne heslo, nové heslo (minimálne 8 znakov) a potvrdenie. Heslo musí byť minimálne 8 znakov dlhé.</p>
+                </section>
+
+                <section class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                    <h4 class="font-extrabold text-emerald-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">10. Role a práva prístupu</h4>
+                    <p><strong>Admin:</strong> Má úplný prístup - môže upravovať všetky kraje, správu všetkých detašovaných pracovísk a správu používateľov. Vidí všetky regióny na mape.</p>
+                    <p class="mt-2"><strong>Editor kraja:</strong> Može upravovať iba svoj pridelený región. Po prihlásení sa automaticky prepne na svoj región a nemôže ho zmeniť. Má prístup na editovanie DP a okresov len v svojom kraji.</p>
+                    <p class="mt-2"><strong>Prehliadač (Viewer):</strong> Má iba čítací prístup. Može si prezerať všetky kraje a modely, ale nemôže nič upravovať.</p>
+                </section>
+
+                <section class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                    <h4 class="font-extrabold text-blue-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">11. Správa používateľov (iba pre Admin)</h4>
+                    <p>Tlačidlo <strong>Spravovať používateľov</strong> je viditeľné iba pre administrátorov. Otvorí zoznam všetkých používateľov s možnosťou zmeny ich rolí a pridelenia regiónov.</p>
+                    <p class="mt-2">Pri každom používateľovi vidíš jeho email, aktuálnu rolu (admin, editor kraja, prehliadač) a pridelený región. Na zmenu klikni na rolu alebo región a ulož zmenu tlačidlom <strong>Uložiť</strong>.</p>
+                    <p class="mt-2">Ak zmeníš rolu na "Editor kraja", musíš prideliť aj konkrétny región. Zmeny sa okamžite prejavia pri ďalšom prihlásení používateľa.</p>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div id="user-admin-modal" class="fixed inset-0 bg-slate-900/65 backdrop-blur-sm hidden items-center justify-center z-[100000] p-4" onclick="closeUserAdminModal(event)">
+        <div class="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-5xl border border-slate-200 max-h-[88vh] overflow-y-auto custom-scrollbar" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between gap-3 mb-5 pb-3 border-b border-slate-200">
+                <div>
+                    <h3 class="text-base sm:text-lg font-black text-slate-800 uppercase tracking-tight">Správa užívateľov</h3>
+                    <p class="text-xs text-slate-500 mt-1">Zmena rolí a regiónov pre prihlásených používateľov</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button onclick="refreshUserAdminTable()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold px-3 py-2 rounded-lg transition-colors">Obnoviť</button>
+                    <button onclick="closeUserAdminModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold px-3 py-2 rounded-lg transition-colors">Zavrieť</button>
+                </div>
+            </div>
+
+            <div id="user-admin-status" class="text-xs text-slate-500 mb-3">Načítavam používateľov...</div>
+
+            <div class="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table class="w-full text-xs">
+                    <thead class="bg-slate-50 text-slate-600 uppercase tracking-wide">
+                        <tr>
+                            <th class="text-left px-3 py-2 font-bold">Email</th>
+                            <th class="text-left px-3 py-2 font-bold">Rola</th>
+                            <th class="text-left px-3 py-2 font-bold">Región</th>
+                            <th class="text-right px-3 py-2 font-bold">Akcia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-admin-table-body" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="password-modal" class="fixed inset-0 bg-slate-900/65 backdrop-blur-sm hidden items-center justify-center z-[100000] p-4" onclick="closePasswordModal(event)">
+        <div class="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-md border border-slate-200" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-slate-200">
+                <div>
+                    <h3 class="text-base font-black text-slate-800 uppercase tracking-tight">Zmena hesla</h3>
+                    <p class="text-xs text-slate-500 mt-1">Po prvom prihlásení si nastavte vlastné heslo</p>
+                </div>
+                <button onclick="closePasswordModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold px-3 py-2 rounded-lg transition-colors shrink-0">Zavrieť</button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label for="password-current-input" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Aktuálne heslo</label>
+                    <input type="password" id="password-current-input" class="w-full bg-slate-100 border border-slate-300 focus:border-brand-500 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none transition-all" autocomplete="current-password">
+                </div>
+                <div>
+                    <label for="password-new-input" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nové heslo</label>
+                    <input type="password" id="password-new-input" class="w-full bg-slate-100 border border-slate-300 focus:border-brand-500 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none transition-all" autocomplete="new-password">
+                </div>
+                <div>
+                    <label for="password-new-confirm-input" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Potvrdiť nové heslo</label>
+                    <input type="password" id="password-new-confirm-input" class="w-full bg-slate-100 border border-slate-300 focus:border-brand-500 rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 focus:outline-none transition-all" autocomplete="new-password">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3 mt-5">
+                <button onclick="closePasswordModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold py-3 px-4 rounded-xl transition-colors">Zrušiť</button>
+                <button onclick="submitPasswordChange()" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white text-xs font-extrabold py-3 px-4 rounded-xl transition-colors">Uložiť heslo</button>
             </div>
         </div>
     </div>
@@ -333,6 +435,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore-compat.js"></script>
 
     <script src="js/data.js"></script>
