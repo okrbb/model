@@ -1,8 +1,8 @@
-name: Deploy static content to Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -10,19 +10,42 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Create firebase-config.js from secrets
+        run: |
+          cat > js/firebase-config.js <<'EOF'
+          window.FIREBASE_CONFIG = {
+            apiKey: "${{ secrets.FIREBASE_API_KEY }}",
+            authDomain: "${{ secrets.FIREBASE_AUTH_DOMAIN }}",
+            projectId: "${{ secrets.FIREBASE_PROJECT_ID }}",
+            storageBucket: "${{ secrets.FIREBASE_STORAGE_BUCKET }}",
+            messagingSenderId: "${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}",
+            appId: "${{ secrets.FIREBASE_APP_ID }}",
+            measurementId: "${{ secrets.FIREBASE_MEASUREMENT_ID }}"
+          };
+
+          window.FIREBASE_SYNC_OPTIONS = {
+            collectionName: 'okr_region_models',
+            districtMetaCollectionName: 'district_meta',
+            autoSaveMs: 1000,
+            regionLock: null
+          };
+
+          window.FIREBASE_AUTH_OPTIONS = {
+            enabled: true,
+            requireSignIn: false,
+            provider: 'email',
+            defaultRole: 'viewer',
+            claimRoleKey: 'role',
+            claimRegionKey: 'regionKey'
+          };
+          EOF
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -32,6 +55,13 @@ jobs:
         with:
           path: .
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
