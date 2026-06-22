@@ -1,7 +1,28 @@
+# Firebase configuration with API keys - NEVER commit to Git
 js/firebase-config.js
+
+# Node modules (if using npm packages)
 node_modules/
+
+# Environment files
 .env
 .env.local
-.firebase/
+.env.*.local
+
+# Firebase emulator data
 firebase-debug.log
+.firebase/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
