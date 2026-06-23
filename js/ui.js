@@ -1,6 +1,6 @@
 ﻿// js/ui.js
 
-function showToast(message, tone = 'info') {
+function showToast(message, tone = 'info', options = {}) {
     const stack = document.getElementById('toast-stack');
     if (!stack) return;
 
@@ -12,9 +12,34 @@ function showToast(message, tone = 'info') {
                 ? 'bg-red-50 border-red-300 text-red-800'
                 : 'bg-slate-50 border-slate-300 text-slate-800';
 
+    const toneIcon = tone === 'success'
+        ? '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
+        : tone === 'warning'
+            ? '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>'
+            : tone === 'danger'
+                ? '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>'
+                : '<svg class="toast-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01"></path></svg>';
+
     const toast = document.createElement('div');
-    toast.className = `toast-item pointer-events-none px-4 py-2 rounded-xl border shadow-lg text-xs font-semibold ${toneClass}`;
-    toast.textContent = message;
+    toast.className = `toast-item pointer-events-auto px-4 py-2 rounded-xl border shadow-lg text-xs font-semibold ${toneClass}`;
+
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    row.innerHTML = `${toneIcon}<span class="leading-tight">${String(message || '')}</span>`;
+    toast.appendChild(row);
+
+    if (options.actionLabel && typeof options.onAction === 'function') {
+        const actionBtn = document.createElement('button');
+        actionBtn.type = 'button';
+        actionBtn.className = 'toast-action-btn mt-1';
+        actionBtn.textContent = options.actionLabel;
+        actionBtn.onclick = () => {
+            options.onAction();
+            toast.remove();
+        };
+        toast.appendChild(actionBtn);
+    }
+
     stack.appendChild(toast);
 
     while (stack.children.length > 3) {
@@ -168,8 +193,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function updateUndoButtonState() {
     const undoBtn = document.getElementById('undo-action-btn');
+    const undoReason = document.getElementById('undo-disabled-reason');
     if (!undoBtn) return;
     undoBtn.disabled = actionHistory.length === 0 || !canEditCurrentRegion();
+    undoBtn.title = undoBtn.disabled ? 'Vrátenie je momentálne nedostupné' : 'Vrátiť poslednú zmenu';
+
+    if (undoReason) {
+        if (!canEditCurrentRegion()) {
+            undoReason.textContent = 'Vrátenie zmien je dostupné len pri editovateľnom kraji.';
+        } else if (actionHistory.length === 0) {
+            undoReason.textContent = 'Nie je dostupná žiadna akcia na vrátenie.';
+        } else {
+            undoReason.textContent = '';
+        }
+    }
 }
 
 function getAccessContextSafe() {
@@ -342,6 +379,8 @@ function renderAccessPanel() {
     const openUserAdminBtn = document.getElementById('open-user-admin-btn');
     const addDpBtn = document.getElementById('add-dp-btn');
     const resetBtn = document.getElementById('reset-model-btn');
+    const addDpReason = document.getElementById('add-dp-disabled-reason');
+    const resetReason = document.getElementById('reset-disabled-reason');
 
     if (!panel || !roleBadge || !regionBadge) return;
 
@@ -392,6 +431,17 @@ function renderAccessPanel() {
         addDpBtn.disabled = !canEdit;
         addDpBtn.classList.toggle('opacity-50', !canEdit);
         addDpBtn.classList.toggle('cursor-not-allowed', !canEdit);
+        addDpBtn.title = canEdit ? 'Vytvoriť nové detašované pracovisko' : 'Pridanie DP je nedostupné';
+    }
+
+    if (addDpReason) {
+        if (canEdit) {
+            addDpReason.textContent = '';
+        } else if (currentRegionKey === 'slovakia') {
+            addDpReason.textContent = 'Pridanie DP je dostupné až po výbere konkrétneho kraja.';
+        } else {
+            addDpReason.textContent = 'Nemáte oprávnenie upravovať tento kraj.';
+        }
     }
 
     if (resetBtn) {
@@ -399,6 +449,11 @@ function renderAccessPanel() {
         resetBtn.disabled = !isAdmin;
         resetBtn.classList.toggle('opacity-50', !isAdmin);
         resetBtn.classList.toggle('cursor-not-allowed', !isAdmin);
+        resetBtn.title = isAdmin ? 'Vymazať model (admin)' : 'Reset modelu je povolený iba pre admina';
+    }
+
+    if (resetReason) {
+        resetReason.textContent = access.role === 'admin' ? '' : 'Reset modelu je povolený iba pre admina.';
     }
 }
 
@@ -446,23 +501,32 @@ function updateWorkflowChips(totalRegionalFte, assignedRegionalFte) {
 
 function updateEditLockUi() {
     const lockBtn = document.getElementById('edit-lock-btn');
+    const lockReason = document.getElementById('edit-lock-disabled-reason');
     if (!lockBtn) return;
 
     if (!canEditCurrentRegion()) {
         lockBtn.textContent = 'Režim úprav: Nedostupný';
-        lockBtn.className = 'w-full bg-slate-200 text-slate-500 text-[11px] font-bold py-2 rounded-lg cursor-not-allowed';
+        lockBtn.className = 'w-full ui-btn-secondary text-[11px] py-2 rounded-lg cursor-not-allowed opacity-60';
         lockBtn.disabled = true;
+        lockBtn.title = 'Režim úprav je nedostupný pre aktuálny kontext';
+        if (lockReason) {
+            lockReason.textContent = currentRegionKey === 'slovakia'
+                ? 'Režim úprav je dostupný až po výbere konkrétneho kraja.'
+                : 'Nemáte oprávnenie upravovať tento kraj.';
+        }
         return;
     }
 
     lockBtn.disabled = false;
+    lockBtn.title = editModeLocked ? 'Kliknite pre zapnutie režimu úprav' : 'Kliknite pre vypnutie režimu úprav';
+    if (lockReason) lockReason.textContent = '';
 
     if (editModeLocked) {
         lockBtn.textContent = 'Režim úprav: Vypnutý';
-        lockBtn.className = 'w-full bg-slate-200 text-slate-700 text-[11px] font-bold py-2 rounded-lg';
+        lockBtn.className = 'w-full ui-btn-secondary text-[11px] py-2 rounded-lg';
     } else {
         lockBtn.textContent = 'Režim úprav: Zapnutý';
-        lockBtn.className = 'w-full bg-slate-900 text-white text-[11px] font-bold py-2 rounded-lg';
+        lockBtn.className = 'w-full ui-btn-primary text-[11px] py-2 rounded-lg';
     }
 }
 
@@ -551,16 +615,28 @@ function updateDistrictFilterOptions() {
     const select = document.getElementById('district-filter-workplace');
     if (!select) return;
 
-    const workplaces = Object.values(customWorkplaces).filter(wp => wp.regionKey === currentRegionKey);
+    const workplaces = currentRegionKey === 'slovakia'
+        ? Object.values(customWorkplaces)
+        : Object.values(customWorkplaces).filter(wp => wp.regionKey === currentRegionKey);
     const prevValue = districtFilterWorkplace;
 
     select.innerHTML = '<option value="all">Všetky DP</option>';
-    workplaces.forEach(wp => {
+    workplaces
+        .sort((a, b) => {
+            if (currentRegionKey === 'slovakia') {
+                const regionCmp = (regionMeta[a.regionKey]?.name || a.regionKey).localeCompare((regionMeta[b.regionKey]?.name || b.regionKey), 'sk');
+                if (regionCmp !== 0) return regionCmp;
+            }
+            return (a.name || '').localeCompare((b.name || ''), 'sk');
+        })
+        .forEach(wp => {
         const option = document.createElement('option');
         option.value = wp.id;
-        option.textContent = wp.name;
+        option.textContent = currentRegionKey === 'slovakia'
+            ? `${wp.name} (${regionMeta[wp.regionKey]?.seat || wp.regionKey})`
+            : wp.name;
         select.appendChild(option);
-    });
+        });
 
     if (workplaces.some(wp => wp.id === prevValue)) {
         select.value = prevValue;
@@ -653,8 +729,15 @@ function closeCustomPrompt() {
 function openConfirmModal(title, subtitle, callback, okLabel = 'Potvrdiť', cancelLabel = 'Zrušiť') {
     document.getElementById('confirm-modal-title').innerText = title;
     document.getElementById('confirm-modal-subtitle').innerText = subtitle;
-    document.getElementById('confirm-modal-ok-btn').innerText = okLabel;
-    document.getElementById('confirm-modal-cancel-btn').innerText = cancelLabel;
+    const okBtn = document.getElementById('confirm-modal-ok-btn');
+    const cancelBtn = document.getElementById('confirm-modal-cancel-btn');
+    okBtn.innerText = okLabel;
+    cancelBtn.innerText = cancelLabel;
+
+    const isDanger = /odstran|zmaza|vymaza/i.test(okLabel);
+    okBtn.className = `flex-1 text-white text-xs font-extrabold py-3 px-4 rounded-xl transition-colors ${isDanger ? 'bg-red-600 hover:bg-red-500' : 'bg-brand-500 hover:bg-brand-600'}`;
+    cancelBtn.className = 'flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold py-3 px-4 rounded-xl transition-colors';
+
     currentConfirmCallback = callback;
     document.getElementById('custom-confirm-modal').style.display = 'flex';
 }
@@ -719,6 +802,47 @@ function normalizeWorkplaceName(name) {
 
 function normalizeColorValue(color) {
     return String(color || '').trim().toLowerCase();
+}
+
+function ensureRowVisibleInScrollablePanel(row) {
+    if (!row) return;
+
+    const panel = row.closest('section.overflow-y-auto');
+    if (!panel) return;
+
+    const panelRect = panel.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const stickyHeader = panel.querySelector('.panel-sticky-header');
+    const stickyBottom = stickyHeader
+        ? (stickyHeader.getBoundingClientRect().bottom - panelRect.top)
+        : 0;
+
+    const topPadding = Math.max(12, stickyBottom + 8);
+    const bottomPadding = 12;
+    const visibleTop = panelRect.top + topPadding;
+    const visibleBottom = panelRect.bottom - bottomPadding;
+
+    const rowIsInPreferredZone = rowRect.top >= visibleTop && rowRect.bottom <= visibleBottom;
+    if (rowIsInPreferredZone) return;
+
+    const rowTopInPanelContent = panel.scrollTop + (rowRect.top - panelRect.top);
+    const targetScrollTop = Math.max(0, rowTopInPanelContent - topPadding);
+    panel.scrollTop = targetScrollTop;
+}
+
+function setDistrictListHoverState(districtName, isHovered) {
+    const norm = normalizeDistrictName(districtName);
+    if (!norm) return;
+
+    const rows = document.querySelectorAll('[data-district-norm]');
+    rows.forEach((row) => {
+        if (row.dataset.districtNorm === norm) {
+            row.classList.toggle('district-row-hovered', !!isHovered);
+            if (isHovered) {
+                ensureRowVisibleInScrollablePanel(row);
+            }
+        }
+    });
 }
 
 function hslToHex(h, s, l) {
@@ -1211,10 +1335,10 @@ function renderLeftWorkplaceList() {
                 </div>
             </div>
             <div class="flex items-center space-x-1 shrink-0">
-                <button onclick="event.stopPropagation(); editWorkplaceName('${wp.id}')" class="text-slate-400 hover:text-brand-500 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                <button onclick="event.stopPropagation(); editWorkplaceName('${wp.id}')" class="text-slate-400 hover:text-brand-500 p-1 rounded-md hover:bg-slate-100 transition-colors" title="Premenovať DP">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 </button>
-                <button onclick="event.stopPropagation(); removeWorkplace('${wp.id}')" class="text-slate-400 hover:text-red-500 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                <button onclick="event.stopPropagation(); removeWorkplace('${wp.id}')" class="text-red-500 hover:text-red-600 p-1 rounded-md hover:bg-red-50 transition-colors" title="Odstrániť DP">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 </button>
             </div>
@@ -1243,23 +1367,57 @@ function renderRightCapacityList() {
     const workplaceFilterEl = document.getElementById('district-filter-workplace');
     if (workplaceFilterEl) districtFilterWorkplace = workplaceFilterEl.value;
 
-    if (!districtData[currentRegionKey]) return;
-
-    const processed = new Set();
-    const uniqueDistricts = [];
-
-    for (const dName in districtData[currentRegionKey]) {
-        const norm = normalizeDistrictName(dName);
-        if (processed.has(norm)) continue;
-        processed.add(norm);
-        uniqueDistricts.push({
-            name: dName,
-            fte: districtData[currentRegionKey][dName].fte,
-            wpId: districtData[currentRegionKey][dName].wpId
-        });
+    const districtEditReason = document.getElementById('district-edit-disabled-reason');
+    if (districtEditReason) {
+        districtEditReason.textContent = canEdit
+            ? ''
+            : currentRegionKey === 'slovakia'
+                ? 'Úpravy okresov sú dostupné až po výbere konkrétneho kraja.'
+                : 'Nemáte oprávnenie upravovať okresy v tomto kraji.';
     }
 
-    uniqueDistricts.sort((a, b) => a.name.localeCompare(b.name, 'sk'));
+    const uniqueDistricts = [];
+    const processed = new Set();
+
+    if (currentRegionKey === 'slovakia') {
+        for (const regionKey in districtData) {
+            for (const dName in districtData[regionKey]) {
+                const norm = normalizeDistrictName(dName);
+                const compositeKey = `${regionKey}::${norm}`;
+                if (processed.has(compositeKey)) continue;
+                processed.add(compositeKey);
+
+                uniqueDistricts.push({
+                    name: dName,
+                    regionKey,
+                    fte: districtData[regionKey][dName].fte,
+                    wpId: districtData[regionKey][dName].wpId
+                });
+            }
+        }
+    } else {
+        if (!districtData[currentRegionKey]) return;
+
+        for (const dName in districtData[currentRegionKey]) {
+            const norm = normalizeDistrictName(dName);
+            if (processed.has(norm)) continue;
+            processed.add(norm);
+            uniqueDistricts.push({
+                name: dName,
+                regionKey: currentRegionKey,
+                fte: districtData[currentRegionKey][dName].fte,
+                wpId: districtData[currentRegionKey][dName].wpId
+            });
+        }
+    }
+
+    uniqueDistricts.sort((a, b) => {
+        if (currentRegionKey === 'slovakia') {
+            const regionCmp = (regionMeta[a.regionKey]?.name || a.regionKey).localeCompare((regionMeta[b.regionKey]?.name || b.regionKey), 'sk');
+            if (regionCmp !== 0) return regionCmp;
+        }
+        return a.name.localeCompare(b.name, 'sk');
+    });
 
     const filteredDistricts = uniqueDistricts.filter(dist => {
         const modeMatch = districtFilterMode === 'all'
@@ -1296,8 +1454,13 @@ function renderRightCapacityList() {
         }
 
         const block = document.createElement('div');
+        block.dataset.districtNorm = normalizeDistrictName(dist.name);
         block.className = "bg-white border border-slate-200 rounded-xl p-3.5 hover:shadow-md transition-all flex items-center justify-between space-x-2";
         const muniCount = getDistrictMunicipalityCount(dist.name);
+        const regionName = regionMeta[dist.regionKey]?.name || dist.regionKey;
+        const regionHtml = currentRegionKey === 'slovakia'
+            ? `<span class="text-[10px] text-slate-500 block font-semibold">Kraj: <strong class="text-slate-700">${regionName}</strong></span>`
+            : '';
         const muniHtml = muniCount !== null
             ? `<span class="text-xs text-slate-700 block font-semibold">Mestá a obce: <strong class="text-slate-800">${muniCount}</strong></span>`
             : '';
@@ -1307,10 +1470,11 @@ function renderRightCapacityList() {
                     <span class="text-xs font-bold text-slate-800 truncate block">${dist.name}</span>
                     ${badgeHtml}
                 </div>
+                ${regionHtml}
                 <span class="text-xs text-slate-700 block font-semibold">Základná kapacita: <strong class="text-slate-800">${dist.fte} FTE</strong></span>
                 ${muniHtml}
             </div>
-            <button onclick="editDistrictFte('${dist.name}')" class="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-brand-500 border border-slate-200 p-2 rounded-lg transition-colors shrink-0" ${canEdit ? '' : 'disabled'}>
+            <button onclick="editDistrictFte('${dist.name}')" class="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-brand-500 border border-slate-200 p-2 rounded-lg transition-colors shrink-0" ${canEdit ? '' : 'disabled'} title="Upraviť FTE okresu">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
             </button>
         `;
@@ -1321,6 +1485,20 @@ function renderRightCapacityList() {
                 editBtn.classList.add('opacity-40', 'cursor-not-allowed');
             }
         }
+
+        block.addEventListener('mouseenter', () => {
+            setDistrictListHoverState(dist.name, true);
+            if (typeof highlightDistrictOnMapByName === 'function') {
+                highlightDistrictOnMapByName(dist.name);
+            }
+        });
+
+        block.addEventListener('mouseleave', () => {
+            setDistrictListHoverState(dist.name, false);
+            if (typeof clearDistrictHoverOnMap === 'function') {
+                clearDistrictHoverOnMap();
+            }
+        });
 
         container.appendChild(block);
     });

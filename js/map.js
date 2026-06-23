@@ -1,5 +1,37 @@
 ﻿// js/map.js
 
+let listHoveredDistrictNorm = null;
+
+function highlightDistrictOnMapByName(districtName) {
+    if (!geojsonLayer || !districtName) return;
+
+    listHoveredDistrictNorm = normalizeDistrictName(districtName);
+
+    geojsonLayer.eachLayer((layer) => {
+        const layerDistrict = getFeatureDistrictName(layer.feature);
+        if (normalizeDistrictName(layerDistrict) !== listHoveredDistrictNorm) return;
+
+        layer.setStyle({
+            color: '#f97316',
+            weight: 1,
+            fillOpacity: 0.85,
+            opacity: 1
+        });
+    });
+}
+
+function clearDistrictHoverOnMap() {
+    if (!geojsonLayer || !listHoveredDistrictNorm) return;
+
+    geojsonLayer.eachLayer((layer) => {
+        const layerDistrict = getFeatureDistrictName(layer.feature);
+        if (normalizeDistrictName(layerDistrict) !== listHoveredDistrictNorm) return;
+        geojsonLayer.resetStyle(layer);
+    });
+
+    listHoveredDistrictNorm = null;
+}
+
 function ensureRegionBorderPanes() {
     if (!map) return;
 
@@ -205,13 +237,19 @@ function drawMapLayers(krajeData, okresyData) {
                 },
                 mouseover: function (e) {
                     updateDistrictTooltip(layer);
-                    if (currentRegionKey !== 'slovakia' && rKey === currentRegionKey) {
+                    if (typeof setDistrictListHoverState === 'function') {
+                        setDistrictListHoverState(dName, true);
+                    }
+                    if (currentRegionKey === 'slovakia' || rKey === currentRegionKey) {
                         layer.setStyle({
                             color: "#f97316", weight: 0.3, fillOpacity: 0.8
                         });
                     }
                 },
                 mouseout: function (e) {
+                    if (typeof setDistrictListHoverState === 'function') {
+                        setDistrictListHoverState(dName, false);
+                    }
                     geojsonLayer.resetStyle(layer);
                 }
             });
