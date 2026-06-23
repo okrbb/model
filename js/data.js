@@ -62,7 +62,7 @@ const districtCoordinates = {
     "Banská Bystrica": [48.7390, 19.1530], "Brezno": [48.8043, 19.6459], "Lučenec": [48.3301, 19.6648],
     "Poltár": [48.4300, 19.7967], "Rimavská Sobota": [48.3824, 20.0121], "Revúca": [48.6835, 20.1171],
     "Veľký Krtíš": [48.2104, 19.3497], "Zvolen": [48.5762, 19.1534], "Detva": [48.5601, 19.4192],
-    "Krupina": [48.3524, 19.0648], "Žiar nad Hronom": [48.5915, 18.8488],
+    "Krupina": [48.3524, 19.0648], "Žiar nad Hronom": [48.5915, 18.8488], "Banská L tiavnica": [48.4585, 18.8931],
     "Žarnovica": [48.4831, 18.7154],
     "Bratislava I": [48.1486, 17.1077], "Bratislava II": [48.1400, 17.1500], "Bratislava III": [48.1700, 17.1300],
     "Bratislava IV": [48.1800, 17.0500], "Bratislava V": [48.1100, 17.1100], "Malacky": [48.4362, 17.0218],
