@@ -1191,7 +1191,7 @@ function renderLeftWorkplaceList() {
                 <span class="w-4 h-4 rounded-full border border-slate-900/10 shrink-0" style="background-color: ${wp.color}"></span>
                 <div>
                     <span class="text-xs font-extrabold text-slate-800 uppercase block text-left">${wp.name}</span>
-                    <span class="text-[10px] text-slate-400 block font-mono font-bold uppercase tracking-wider text-left">${mappedCount} okresov | ${cumFte} FTE | ${cumMunicipalities} obcí</span>
+                    <span class="text-[9px] text-slate-600 block font-bold uppercase tracking-wide text-left">${mappedCount} okresov | ${cumFte} FTE | ${cumMunicipalities} obcí</span>
                 </div>
             </div>
             <div class="flex items-center space-x-1 shrink-0">
@@ -1269,11 +1269,11 @@ function renderRightCapacityList() {
     }
 
     filteredDistricts.forEach(dist => {
-        let badgeHtml = `<span class="bg-slate-100 text-slate-500 text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-full">Nezaradené</span>`;
+        let badgeHtml = `<span class="bg-slate-100 text-slate-700 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">Nezaradené</span>`;
         if (dist.wpId && customWorkplaces[dist.wpId]) {
             const wp = customWorkplaces[dist.wpId];
             badgeHtml = `
-                <span class="text-white text-[9px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full shadow-sm" style="background-color: ${wp.color}">
+                <span class="text-white text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full shadow-sm" style="background-color: ${wp.color}">
                     ${wp.name}
                 </span>
             `;
@@ -1283,7 +1283,7 @@ function renderRightCapacityList() {
         block.className = "bg-white border border-slate-200 rounded-xl p-3.5 hover:shadow-md transition-all flex items-center justify-between space-x-2";
         const muniCount = getDistrictMunicipalityCount(dist.name);
         const muniHtml = muniCount !== null
-            ? `<span class="text-[10px] text-slate-400 block font-mono font-bold">Mestá a obce: <strong class="text-slate-600">${muniCount}</strong></span>`
+            ? `<span class="text-xs text-slate-700 block font-semibold">Mestá a obce: <strong class="text-slate-800">${muniCount}</strong></span>`
             : '';
         block.innerHTML = `
             <div class="space-y-1.5 min-w-0 text-left">
@@ -1291,7 +1291,7 @@ function renderRightCapacityList() {
                     <span class="text-xs font-bold text-slate-800 truncate block">${dist.name}</span>
                     ${badgeHtml}
                 </div>
-                <span class="text-[10px] text-slate-400 block font-mono font-bold">Základná kapacita: <strong class="text-slate-600">${dist.fte} FTE</strong></span>
+                <span class="text-xs text-slate-700 block font-semibold">Základná kapacita: <strong class="text-slate-800">${dist.fte} FTE</strong></span>
                 ${muniHtml}
             </div>
             <button onclick="editDistrictFte('${dist.name}')" class="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-brand-500 border border-slate-200 p-2 rounded-lg transition-colors shrink-0" ${canEdit ? '' : 'disabled'}>
