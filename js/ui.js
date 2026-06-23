@@ -693,6 +693,123 @@ function changeDistrictFilterWorkplace() {
     renderRightCapacityList();
 }
 
+function normalizeWorkplaceName(name) {
+    return String(name || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeColorValue(color) {
+    return String(color || '').trim().toLowerCase();
+}
+
+function hslToHex(h, s, l) {
+    const sat = Math.max(0, Math.min(100, Number(s))) / 100;
+    const lig = Math.max(0, Math.min(100, Number(l))) / 100;
+    const c = (1 - Math.abs(2 * lig - 1)) * sat;
+    const hp = ((h % 360) + 360) % 360 / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+
+    if (hp >= 0 && hp < 1) {
+        r = c;
+        g = x;
+    } else if (hp >= 1 && hp < 2) {
+        r = x;
+        g = c;
+    } else if (hp >= 2 && hp < 3) {
+        g = c;
+        b = x;
+    } else if (hp >= 3 && hp < 4) {
+        g = x;
+        b = c;
+    } else if (hp >= 4 && hp < 5) {
+        r = x;
+        b = c;
+    } else {
+        r = c;
+        b = x;
+    }
+
+    const m = lig - c / 2;
+    const toHex = (v) => {
+        const n = Math.round((v + m) * 255);
+        return n.toString(16).padStart(2, '0');
+    };
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function getNextUniqueWorkplaceColor() {
+    const usedGlobal = new Set(
+        Object.values(customWorkplaces || {})
+            .map((wp) => normalizeColorValue(wp?.color))
+            .filter(Boolean)
+    );
+
+    const paletteColor = (colorPalette || []).find((color) => !usedGlobal.has(normalizeColorValue(color)));
+    if (paletteColor) {
+        return paletteColor;
+    }
+
+    // Palette exhausted: generate stable high-contrast unique colors.
+    const start = Object.keys(customWorkplaces || {}).length;
+    for (let i = 0; i < 720; i++) {
+        const hue = ((start + i) * 137.508) % 360;
+        const candidate = hslToHex(hue, 78, 50);
+        if (!usedGlobal.has(normalizeColorValue(candidate))) {
+            return candidate;
+        }
+    }
+
+    // Last-resort fallback should practically never be needed.
+    return `#${Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')}`;
+}
+
+function repairDuplicateWorkplaceColors() {
+    const entries = Object.values(customWorkplaces || {});
+    if (!entries.length) {
+        return { changedCount: 0, touchedRegions: [] };
+    }
+
+    const ordered = [...entries].sort((a, b) => {
+        const regionCmp = String(a?.regionKey || '').localeCompare(String(b?.regionKey || ''), 'sk');
+        if (regionCmp !== 0) return regionCmp;
+        const idCmp = String(a?.id || '').localeCompare(String(b?.id || ''), 'sk');
+        if (idCmp !== 0) return idCmp;
+        return String(a?.name || '').localeCompare(String(b?.name || ''), 'sk');
+    });
+
+    const usedGlobal = new Set();
+    const touchedRegions = new Set();
+    let changedCount = 0;
+
+    ordered.forEach((wp) => {
+        if (!wp?.id || !customWorkplaces[wp.id]) return;
+
+        const currentColor = normalizeColorValue(wp.color);
+        if (currentColor && !usedGlobal.has(currentColor)) {
+            usedGlobal.add(currentColor);
+            return;
+        }
+
+        const nextColor = getNextUniqueWorkplaceColor();
+        customWorkplaces[wp.id].color = nextColor;
+        usedGlobal.add(normalizeColorValue(nextColor));
+        touchedRegions.add(customWorkplaces[wp.id].regionKey);
+        changedCount += 1;
+    });
+
+    return {
+        changedCount,
+        touchedRegions: Array.from(touchedRegions).filter(Boolean)
+    };
+}
+
 function submitCustomPrompt() {
     if (currentPromptCallback) {
         let value;
@@ -717,21 +834,51 @@ function openAddDPPrompt() {
         return;
     }
 
+    // Skontroluj, či sú všetky okresy v kraji už priradené
+    if (districtData[currentRegionKey]) {
+        let totalDistricts = 0;
+        let assignedDistricts = 0;
+        
+        for (const dName in districtData[currentRegionKey]) {
+            const item = districtData[currentRegionKey][dName];
+            totalDistricts++;
+            if (item.wpId) {
+                assignedDistricts++;
+            }
+        }
+        
+        if (totalDistricts > 0 && assignedDistricts === totalDistricts) {
+            showToast('Všetky okresy v kraji sú už priradené. Nemožno vytvoriť nové DP.', 'warning');
+            return;
+        }
+    }
+
     openPromptModal(
         "Nové detašované pracovisko",
         "Zadajte názov pre plánované spoločné pracovisko:",
         'text',
         "",
         function (name) {
-            if (!name) return;
+            const cleanedName = String(name || '').replace(/\s+/g, ' ').trim();
+            if (!cleanedName) return;
+
+            const targetNorm = normalizeWorkplaceName(cleanedName);
+            const duplicateExists = Object.values(customWorkplaces).some((wp) => {
+                if (wp.regionKey !== currentRegionKey) return false;
+                return normalizeWorkplaceName(wp.name) === targetNorm;
+            });
+
+            if (duplicateExists) {
+                showToast('DP s rovnakým názvom v tomto kraji už existuje.', 'warning');
+                return;
+            }
             
             const id = "wp-" + Date.now();
-            const color = colorPalette[window.colorIndex % colorPalette.length];
-            window.colorIndex++;
+            const color = getNextUniqueWorkplaceColor();
 
             customWorkplaces[id] = {
                 id: id,
-                name: name,
+                name: cleanedName,
                 color: color,
                 regionKey: currentRegionKey
             };
@@ -748,7 +895,60 @@ function openAddDPPrompt() {
                 scheduleRegionSave(currentRegionKey);
             }
 
-            showToast(`DP ${name} bolo vytvorené.`, 'success');
+            showToast(`DP ${cleanedName} bolo vytvorené.`, 'success');
+        }
+    );
+}
+
+function editWorkplaceName(id) {
+    if (!canEditCurrentRegion()) {
+        showToast('Nemáte oprávnenie upravovať tento kraj.', 'warning');
+        return;
+    }
+
+    if (editModeLocked) {
+        showToast('Režim úprav je vypnutý.', 'warning');
+        return;
+    }
+
+    const workplace = customWorkplaces[id];
+    if (!workplace) return;
+
+    openPromptModal(
+        'Upraviť názov DP',
+        'Zadajte nový názov pre detašované pracovisko:',
+        'text',
+        workplace.name,
+        function (newName) {
+            const cleanedName = String(newName || '').replace(/\s+/g, ' ').trim();
+            if (!cleanedName) return;
+
+            if (cleanedName === workplace.name) {
+                return;
+            }
+
+            const targetNorm = normalizeWorkplaceName(cleanedName);
+            const duplicateExists = Object.values(customWorkplaces).some((wp) => {
+                if (wp.id === id) return false;
+                if (wp.regionKey !== currentRegionKey) return false;
+                return normalizeWorkplaceName(wp.name) === targetNorm;
+            });
+
+            if (duplicateExists) {
+                showToast('DP s rovnakým názvom v tomto kraji už existuje.', 'warning');
+                return;
+            }
+
+            customWorkplaces[id].name = cleanedName;
+            redrawUiAndStats();
+
+            if (typeof saveRegionImmediately === 'function') {
+                saveRegionImmediately(currentRegionKey);
+            } else if (typeof scheduleRegionSave === 'function') {
+                scheduleRegionSave(currentRegionKey);
+            }
+
+            showToast(`DP bolo premenované na ${cleanedName}.`, 'success');
         }
     );
 }
@@ -767,39 +967,55 @@ function removeWorkplace(id) {
     const workplace = customWorkplaces[id];
     if (!workplace) return;
 
-    const affectedDistricts = [];
-    for (const rKey in districtData) {
-        for (const dist in districtData[rKey]) {
-            if (districtData[rKey][dist].wpId === id) {
-                affectedDistricts.push({ regionKey: rKey, districtName: dist, wpId: id });
-                districtData[rKey][dist].wpId = null;
+    openConfirmModal(
+        'Odstrániť detašované pracovisko',
+        `Naozaj chcete odstrániť DP ${workplace.name}? Zrušia sa aj jeho priradenia okresov.`,
+        function (confirmed) {
+            if (!confirmed) return;
+
+            const affectedDistricts = [];
+            for (const rKey in districtData) {
+                for (const dist in districtData[rKey]) {
+                    if (districtData[rKey][dist].wpId === id) {
+                        affectedDistricts.push({ regionKey: rKey, districtName: dist, wpId: id });
+                        districtData[rKey][dist].wpId = null;
+                    }
+                }
             }
-        }
-    }
 
-    addHistoryAction({
-        type: 'remove-workplace',
-        workplace: { ...workplace },
-        affectedDistricts
-    });
+            addHistoryAction({
+                type: 'remove-workplace',
+                workplace: { ...workplace },
+                affectedDistricts
+            });
 
-    delete customWorkplaces[id];
-    if (activeWorkplaceId === id) activeWorkplaceId = null;
-    
-    if (offlineModeActive) {
-        drawOfflineNodeMap();
-    } else if (geojsonLayer) {
-        geojsonLayer.eachLayer(layer => geojsonLayer.resetStyle(layer));
-    }
-    redrawUiAndStats();
+            delete customWorkplaces[id];
+            if (activeWorkplaceId === id) activeWorkplaceId = null;
+            
+            if (offlineModeActive) {
+                drawOfflineNodeMap();
+            } else if (geojsonLayer) {
+                geojsonLayer.eachLayer(layer => geojsonLayer.resetStyle(layer));
+            }
+            redrawUiAndStats();
 
-    if (typeof scheduleRegionSave === 'function') {
-        const touched = new Set([workplace.regionKey]);
-        affectedDistricts.forEach(item => touched.add(item.regionKey));
-        touched.forEach(regionKey => scheduleRegionSave(regionKey));
-    }
+            const touched = new Set([workplace.regionKey]);
+            affectedDistricts.forEach(item => touched.add(item.regionKey));
+            touched.forEach(regionKey => {
+                if (typeof saveRegionImmediately === 'function') {
+                    saveRegionImmediately(regionKey);
+                    return;
+                }
+                if (typeof scheduleRegionSave === 'function') {
+                    scheduleRegionSave(regionKey);
+                }
+            });
 
-    showToast(`DP ${workplace.name} bolo odstránené.`, 'info');
+            showToast(`DP ${workplace.name} bolo odstránené.`, 'info');
+        },
+        'Odstrániť',
+        'Zrušiť'
+    );
 }
 
 function editDistrictFte(districtName) {
@@ -978,17 +1194,22 @@ function renderLeftWorkplaceList() {
                     <span class="text-[10px] text-slate-400 block font-mono font-bold uppercase tracking-wider text-left">${mappedCount} okresov | ${cumFte} FTE | ${cumMunicipalities} obcí</span>
                 </div>
             </div>
-            <button onclick="event.stopPropagation(); removeWorkplace('${wp.id}')" class="text-slate-400 hover:text-red-500 p-1 rounded-md hover:bg-slate-100 transition-colors shrink-0">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
+            <div class="flex items-center space-x-1 shrink-0">
+                <button onclick="event.stopPropagation(); editWorkplaceName('${wp.id}')" class="text-slate-400 hover:text-brand-500 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                </button>
+                <button onclick="event.stopPropagation(); removeWorkplace('${wp.id}')" class="text-slate-400 hover:text-red-500 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </div>
         `;
 
         if (!canEdit) {
-            const removeBtn = itemDiv.querySelector('button');
-            if (removeBtn) {
-                removeBtn.disabled = true;
-                removeBtn.classList.add('opacity-40', 'cursor-not-allowed');
-            }
+            const btns = itemDiv.querySelectorAll('button');
+            btns.forEach((btn) => {
+                btn.disabled = true;
+                btn.classList.add('opacity-40', 'cursor-not-allowed');
+            });
         }
 
         listContainer.appendChild(itemDiv);
