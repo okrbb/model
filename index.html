@@ -76,14 +76,17 @@
                 <!-- Sign-out button (shown when logged in) -->
                 <button id="auth-sign-out-btn" onclick="requestFirebaseSignOut()" class="text-[10px] font-bold uppercase bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded hidden">Odhlásiť</button>
 
+                <!-- Reload button (shown when logged in) -->
+                <button id="auth-reload-btn" onclick="reloadCurrentRegionData()" class="text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded hidden" title="Obnoviť dáta">Obnoviť</button>
+
                 <!-- Password change button (shown when logged in) -->
-                <button id="auth-change-password-btn" onclick="openPasswordModal()" class="text-[10px] font-bold uppercase bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded hidden">Heslo</button>
+                <button id="auth-change-password-btn" onclick="openPasswordModal()" class="text-[10px] font-bold uppercase bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded hidden" title="Zmeniť heslo">Heslo</button>
                 
                 <!-- Toggle form button (shown when not logged in) -->
                 <button id="auth-toggle-form-btn" onclick="toggleAuthForm()" class="text-[10px] font-bold uppercase bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded">Prihlásiť</button>
 
                 <!-- Admin-only users management -->
-                <button id="open-user-admin-btn" onclick="openUserAdminModal()" class="text-[10px] font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded hidden">Užívatelia</button>
+                <button id="open-user-admin-btn" onclick="openUserAdminModal()" class="text-[10px] font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded hidden" title="Správa užívateľov">Užívatelia</button>
             </div>
 
             <button onclick="openGuideModal()" class="bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/30 text-brand-100 hover:text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors uppercase tracking-wide">
@@ -206,6 +209,18 @@
         </section>
 
         <section class="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 p-5 flex flex-col shrink-0 overflow-y-auto custom-scrollbar">
+            <span class="block text-xs font-black text-slate-500 uppercase tracking-wider mb-3 font-mono">3. Vyhľadať okres:</span>
+
+            <div class="mb-4">
+                <div class="flex items-center space-x-2">
+                    <input id="district-search-input" type="text" placeholder="Názov okresu..." class="flex-1 bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-300" oninput="performDistrictSearch()">
+                    <button onclick="clearDistrictSearch()" class="bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 border border-slate-300 p-2 rounded-lg transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div id="district-search-result" class="hidden mt-3 bg-emerald-50 border border-emerald-300 rounded-xl p-3 space-y-2 text-xs"></div>
+            </div>
+
             <span class="block text-xs font-black text-slate-500 uppercase tracking-wider mb-4 font-mono">4. Kapacity okresov v kraji:</span>
 
             <div class="grid grid-cols-1 gap-2 mb-3">
