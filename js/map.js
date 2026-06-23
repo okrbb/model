@@ -305,6 +305,17 @@ function drawOfflineNodeMap() {
 }
 
 function recenterToSelectedRegion() {
+    // If currently viewing all of Slovakia, restore the previous region
+    if (currentRegionKey === 'slovakia' && previousRegionKey && previousRegionKey !== 'slovakia') {
+        // Use changeRegion() to properly reload data and update UI
+        const selector = document.getElementById('active-region-selector');
+        if (selector) {
+            selector.value = previousRegionKey;
+            changeRegion(); // This will handle data loading and UI refresh
+            return;
+        }
+    }
+
     if (offlineModeActive) {
         const meta = regionMeta[currentRegionKey];
         if (meta && map) {
@@ -357,6 +368,11 @@ function recenterToSelectedRegion() {
 
 function recenterToSlovakia() {
     if (!geojsonLayer || !map) return;
+
+    // Save current region before switching to Slovakia view
+    if (currentRegionKey !== 'slovakia') {
+        previousRegionKey = currentRegionKey;
+    }
 
     currentRegionKey = 'slovakia';
     syncRegionSelector('slovakia');

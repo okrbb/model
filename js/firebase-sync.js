@@ -228,10 +228,23 @@ function applyRegionPayload(regionKey, payload) {
         };
     });
 
+    // Process payload districts with normalization and merging for merged cities (Bratislava, Košice)
     Object.entries(payloadDistricts).forEach(([districtName, value]) => {
-        districtData[regionKey][districtName] = {
+        const canonicalName = getCanonicalDistrictName(districtName);
+        const targetName = canonicalName;
+        
+        // Keep existing wpId if it's already set (from defaults), otherwise use payload's wpId
+        const existingEntry = districtData[regionKey][targetName];
+        let wpIdToUse = existingEntry?.wpId || value?.wpId || null;
+        
+        // FIX: For bratislavsky region, reset all wpId to null to fix corruption
+        if (regionKey === 'bratislavsky') {
+            wpIdToUse = null;
+        }
+        
+        districtData[regionKey][targetName] = {
             fte: Number(value?.fte || 0),
-            wpId: value?.wpId || null
+            wpId: wpIdToUse
         };
     });
 
@@ -685,6 +698,50 @@ async function requestFirebaseSignOut() {
     if (!firebaseSyncState.auth) return false;
     try {
         await firebaseSyncState.auth.signOut();
+        
+        // Reset selection states but KEEP data for map to show colored districts
+        activeWorkplaceId = null;
+        districtFilterMode = 'all';
+        districtFilterWorkplace = 'all';
+        currentRegionKey = 'slovakia';
+        
+        // Zoom map to show full Slovakia first
+        if (!offlineModeActive && geojsonLayer && map) {
+            let bounds = L.latLngBounds([]);
+            geojsonLayer.eachLayer(layer => bounds.extend(layer.getBounds()));
+            if (bounds.isValid()) {
+                selectedRegionBounds = bounds;
+                map.fitBounds(bounds, { padding: [35, 35], animate: true, duration: 1.0 });
+            }
+            
+            // Reset all layers styling
+            geojsonLayer.eachLayer(layer => geojsonLayer.resetStyle(layer));
+            
+            // Apply Slovakia view styling to kraje layer
+            if (krajeLayer) {
+                krajeLayer.setStyle(function (feature) {
+                    return { color: "#ef4444", weight: 1.2, fillColor: "#0f172a", fillOpacity: 0, opacity: 1 };
+                });
+            }
+        }
+        
+        // Now refresh UI panels after map zoom
+        const regionSelector = document.getElementById('active-region-selector');
+        if (regionSelector) regionSelector.value = 'slovakia';
+        
+        const searchInput = document.getElementById('district-search-input');
+        if (searchInput) searchInput.value = '';
+        const searchResult = document.getElementById('district-search-result');
+        if (searchResult) {
+            searchResult.classList.add('hidden');
+            searchResult.innerHTML = '';
+        }
+        
+        renderLeftWorkplaceList();
+        renderRightCapacityList();
+        updateSaveIndicator();
+        
+        showToast('Boli ste úspešne odhlásení.', 'info');
         return true;
     } catch (err) {
         console.error('Firebase sign out failed', err);

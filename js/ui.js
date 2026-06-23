@@ -8,7 +8,9 @@ function showToast(message, tone = 'info') {
         ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
         : tone === 'warning'
             ? 'bg-amber-50 border-amber-300 text-amber-800'
-            : 'bg-slate-50 border-slate-300 text-slate-800';
+            : tone === 'danger'
+                ? 'bg-red-50 border-red-300 text-red-800'
+                : 'bg-slate-50 border-slate-300 text-slate-800';
 
     const toast = document.createElement('div');
     toast.className = `toast-item pointer-events-none px-4 py-2 rounded-xl border shadow-lg text-xs font-semibold ${toneClass}`;
@@ -21,7 +23,7 @@ function showToast(message, tone = 'info') {
 
     setTimeout(() => {
         toast.remove();
-    }, 2200);
+    }, 5000);
 }
 
 function toggleAuthForm() {
@@ -335,6 +337,7 @@ function renderAccessPanel() {
     const signInBtn = document.getElementById('auth-sign-in-btn');
     const toggleFormBtn = document.getElementById('auth-toggle-form-btn');
     const signOutBtn = document.getElementById('auth-sign-out-btn');
+    const reloadBtn = document.getElementById('auth-reload-btn');
     const changePasswordBtn = document.getElementById('auth-change-password-btn');
     const openUserAdminBtn = document.getElementById('open-user-admin-btn');
     const addDpBtn = document.getElementById('add-dp-btn');
@@ -367,6 +370,9 @@ function renderAccessPanel() {
         const isAuthenticated = access.isAuthenticated;
         toggleFormBtn.classList.toggle('hidden', isAuthenticated);
         signOutBtn.classList.toggle('hidden', !isAuthenticated);
+        if (reloadBtn) {
+            reloadBtn.classList.toggle('hidden', !isAuthenticated);
+        }
         if (changePasswordBtn) {
             changePasswordBtn.classList.toggle('hidden', !isAuthenticated);
         }
@@ -578,7 +584,17 @@ function syncRegionSelector(value) {
 }
 
 async function changeRegion() {
-    currentRegionKey = document.getElementById('active-region-selector').value;
+    const newRegionKey = document.getElementById('active-region-selector').value;
+    
+    // Save previous region when switching away from Slovakia
+    if (currentRegionKey === 'slovakia' && newRegionKey !== 'slovakia') {
+        previousRegionKey = newRegionKey;
+    } else if (newRegionKey !== 'slovakia') {
+        // Also update when switching between regions
+        previousRegionKey = newRegionKey;
+    }
+    
+    currentRegionKey = newRegionKey;
     activeWorkplaceId = null; 
 
     if (typeof loadAllRegionsFromCloud === 'function' && currentRegionKey === 'slovakia') {
@@ -1011,7 +1027,7 @@ function removeWorkplace(id) {
                 }
             });
 
-            showToast(`DP ${workplace.name} bolo odstránené.`, 'info');
+            showToast(`DP ${workplace.name} bolo odstránené.`, 'danger');
         },
         'Odstrániť',
         'Zrušiť'
@@ -1308,4 +1324,124 @@ function renderRightCapacityList() {
 
         container.appendChild(block);
     });
+}
+
+function performDistrictSearch() {
+    const searchInput = document.getElementById('district-search-input');
+    const searchResult = document.getElementById('district-search-result');
+    
+    if (!searchInput || !searchResult) return;
+    
+    const query = searchInput.value.trim().toLowerCase();
+    
+    if (!query) {
+        searchResult.classList.add('hidden');
+        searchResult.innerHTML = '';
+        return;
+    }
+    
+    // Search across all regions
+    let foundDistrict = null;
+    let foundRegionKey = null;
+    
+    for (const regionKey in districtData) {
+        for (const districtName in districtData[regionKey]) {
+            if (normalizeDistrictName(districtName).includes(normalizeDistrictName(query))) {
+                foundDistrict = {
+                    name: districtName,
+                    fte: districtData[regionKey][districtName].fte,
+                    wpId: districtData[regionKey][districtName].wpId
+                };
+                foundRegionKey = regionKey;
+                break;
+            }
+        }
+        if (foundDistrict) break;
+    }
+    
+    if (!foundDistrict || !foundRegionKey) {
+        searchResult.innerHTML = `<div class="text-slate-500 font-semibold">Okres nenájdený.</div>`;
+        searchResult.classList.remove('hidden');
+        return;
+    }
+    
+    const regionMeta = {
+        "banska-bystrica": "Banskobystrický kraj",
+        "bratislavsky": "Bratislavský kraj",
+        "trnava": "Trnavský kraj",
+        "trencin": "Trenčiansky kraj",
+        "nitra": "Nitriansky kraj",
+        "zilina": "Žilinský kraj",
+        "presov": "Prešovský kraj",
+        "kosice": "Košický kraj"
+    };
+    
+    let workplaceName = "Nepriradené";
+    if (foundDistrict.wpId && customWorkplaces[foundDistrict.wpId]) {
+        workplaceName = customWorkplaces[foundDistrict.wpId].name;
+    }
+    
+    const muniCount = getDistrictMunicipalityCount(foundDistrict.name);
+    const muniHtml = muniCount !== null ? `<div class="flex justify-between"><span class="text-slate-600">Mestá a obce:</span><strong class="text-slate-800">${muniCount}</strong></div>` : '';
+    
+    searchResult.innerHTML = `
+        <div class="flex justify-between"><span class="text-slate-600">Okres:</span><strong class="text-slate-800">${foundDistrict.name}</strong></div>
+        <div class="flex justify-between"><span class="text-slate-600">Kraj:</span><strong class="text-slate-800">${regionMeta[foundRegionKey] || foundRegionKey}</strong></div>
+        <div class="flex justify-between"><span class="text-slate-600">Priradené k DP:</span><strong class="text-slate-800">${workplaceName}</strong></div>
+        ${muniHtml}
+        <div class="flex justify-between"><span class="text-slate-600">Kapacita FTE:</span><strong class="text-slate-800">${foundDistrict.fte}</strong></div>
+    `;
+    searchResult.classList.remove('hidden');
+}
+
+function clearDistrictSearch() {
+    const searchInput = document.getElementById('district-search-input');
+    const searchResult = document.getElementById('district-search-result');
+    
+    if (searchInput) searchInput.value = '';
+    if (searchResult) {
+        searchResult.classList.add('hidden');
+        searchResult.innerHTML = '';
+    }
+}
+
+async function reloadCurrentRegionData() {
+    const access = getAccessContextSafe();
+    if (!access.isAuthenticated) {
+        showToast('Najprv sa prihláste.', 'warning');
+        return;
+    }
+
+    const reloadBtn = document.getElementById('auth-reload-btn');
+    if (reloadBtn) {
+        reloadBtn.disabled = true;
+        reloadBtn.style.opacity = '0.6';
+    }
+
+    try {
+        if (currentRegionKey === 'slovakia') {
+            // Reload all regions if currently viewing Slovakia
+            if (typeof loadAllRegionsFromCloud === 'function') {
+                await loadAllRegionsFromCloud({ silent: true, skipRedraw: false });
+            }
+        } else {
+            // Reload just the current region
+            if (typeof loadRegionFromCloud === 'function') {
+                await loadRegionFromCloud(currentRegionKey, { silent: true, skipRedraw: false });
+            }
+        }
+        
+        // Refresh UI after reload
+        redrawUiAndStats();
+        
+        showToast('Dáta boli úspešne reloadnuté z Firestore.', 'success');
+    } catch (err) {
+        console.error('Failed to reload region data', err);
+        showToast('Reload dát zlyhal. Skúste to neskôr.', 'warning');
+    } finally {
+        if (reloadBtn) {
+            reloadBtn.disabled = false;
+            reloadBtn.style.opacity = '1';
+        }
+    }
 }

@@ -1,6 +1,7 @@
 ﻿// js/app.js
 
 let currentRegionKey = "slovakia";
+let previousRegionKey = "banska-bystrica"; // Saved region when viewing all of Slovakia
 let districtMunicipalityCounts = {};
 let activeWorkplaceId = null; 
 let offlineModeActive = false; 
@@ -51,7 +52,7 @@ function undoLastAction() {
     if (lastAction.type === 'create-workplace') {
         delete customWorkplaces[lastAction.workplace.id];
         if (activeWorkplaceId === lastAction.workplace.id) activeWorkplaceId = null;
-        showToast(`DP ${lastAction.workplace.name} bolo odstránené (undo).`, 'info');
+        showToast(`DP ${lastAction.workplace.name} bolo odstránené (undo).`, 'danger');
     }
 
     if (lastAction.type === 'remove-workplace') {
