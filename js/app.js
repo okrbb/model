@@ -512,6 +512,8 @@ function resetModelData() {
 
 
 window.onload = async function () {
+    const colorRepairStorageKey = 'workplace-color-repair-v1-complete';
+
     if (typeof initFirebaseSync === 'function') {
         const synced = await initFirebaseSync();
 
@@ -525,6 +527,34 @@ window.onload = async function () {
 
         if (synced && typeof loadAllRegionsFromCloud === 'function') {
             await loadAllRegionsFromCloud({ silent: true, skipRedraw: false });
+        }
+
+        if (synced && typeof repairDuplicateWorkplaceColors === 'function') {
+            let shouldRunColorRepair = true;
+            try {
+                shouldRunColorRepair = localStorage.getItem(colorRepairStorageKey) !== '1';
+            } catch (err) {
+                // If storage is unavailable, run repair once for this page load.
+                shouldRunColorRepair = true;
+            }
+
+            if (shouldRunColorRepair) {
+                const repair = repairDuplicateWorkplaceColors();
+                if (repair.changedCount > 0) {
+                    if (typeof saveRegionImmediately === 'function') {
+                        await Promise.all(repair.touchedRegions.map((regionKey) => saveRegionImmediately(regionKey)));
+                    } else if (typeof scheduleRegionSave === 'function') {
+                        repair.touchedRegions.forEach((regionKey) => scheduleRegionSave(regionKey));
+                    }
+                    showToast(`Jednorazový repair farieb dokončený (${repair.changedCount} DP).`, 'info');
+                }
+
+                try {
+                    localStorage.setItem(colorRepairStorageKey, '1');
+                } catch (err) {
+                    // Non-fatal: repair will run again on next load if storage is blocked.
+                }
+            }
         }
     }
 
