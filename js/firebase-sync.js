@@ -29,7 +29,8 @@ const firebaseSyncState = {
     },
     accessListeners: [],
     saveTimers: {},
-    saveInFlight: {}
+    saveInFlight: {},
+    saveQueued: {}
 };
 
 const FIREBASE_DATASET_SEED_VERSION = 1;
@@ -265,12 +266,27 @@ async function saveRegionToCloud(regionKey) {
     const lock = getRegionLockKey();
     if (lock && regionKey !== lock) return;
 
-    if (firebaseSyncState.saveInFlight[regionKey]) return;
+    if (firebaseSyncState.saveInFlight[regionKey]) {
+        firebaseSyncState.saveQueued[regionKey] = true;
+        return;
+    }
 
     try {
         firebaseSyncState.saveInFlight[regionKey] = true;
         const payload = buildRegionPayload(regionKey);
-        await getRegionDocRef(regionKey).set(payload, { merge: true });
+        const docRef = getRegionDocRef(regionKey);
+
+        // Use update to replace map fields (districts/workplaces) as a whole.
+        // merge:true recursively merges nested maps and can keep deleted workplace keys alive.
+        try {
+            await docRef.update(payload);
+        } catch (updateErr) {
+            if (updateErr?.code === 'not-found') {
+                await docRef.set(payload, { merge: false });
+            } else {
+                throw updateErr;
+            }
+        }
     } catch (err) {
         console.error('Firebase save failed for region', regionKey, err);
         if (typeof showToast === 'function') {
@@ -278,6 +294,12 @@ async function saveRegionToCloud(regionKey) {
         }
     } finally {
         firebaseSyncState.saveInFlight[regionKey] = false;
+        if (firebaseSyncState.saveQueued[regionKey]) {
+            delete firebaseSyncState.saveQueued[regionKey];
+            setTimeout(() => {
+                saveRegionToCloud(regionKey);
+            }, 0);
+        }
     }
 }
 
@@ -303,6 +325,18 @@ function scheduleRegionSave(regionKey) {
 function scheduleSaveForAllRegions() {
     if (!isFirebaseSyncEnabled()) return;
     getAllowedRegionKeys().forEach((regionKey) => scheduleRegionSave(regionKey));
+}
+
+function saveRegionImmediately(regionKey) {
+    if (!isFirebaseSyncEnabled()) return Promise.resolve();
+    if (!regionKey || regionKey === 'slovakia') return Promise.resolve();
+
+    if (firebaseSyncState.saveTimers[regionKey]) {
+        clearTimeout(firebaseSyncState.saveTimers[regionKey]);
+        delete firebaseSyncState.saveTimers[regionKey];
+    }
+
+    return saveRegionToCloud(regionKey);
 }
 
 async function flushPendingRegionSaves() {
@@ -803,6 +837,7 @@ window.isFirebaseSyncEnabled = isFirebaseSyncEnabled;
 window.loadRegionFromCloud = loadRegionFromCloud;
 window.loadAllRegionsFromCloud = loadAllRegionsFromCloud;
 window.scheduleRegionSave = scheduleRegionSave;
+window.saveRegionImmediately = saveRegionImmediately;
 window.scheduleSaveForAllRegions = scheduleSaveForAllRegions;
 window.flushPendingRegionSaves = flushPendingRegionSaves;
 window.applyRegionLockUi = applyRegionLockUi;
