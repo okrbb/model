@@ -74,8 +74,8 @@ const districtCoordinates = {
     "Nové Mesto nad Váhom": [48.7562, 17.8304], "Myjava": [48.7523, 17.5678], "Považská Bystrica": [49.1164, 18.4481],
     "Púchov": [49.1249, 18.3262], "Prievidza": [48.7724, 18.6253], "Partizánske": [48.6284, 18.3742],
     "Nitra": [48.3061, 18.0878], "Zlaté Moravce": [48.3848, 18.4004], "Komárno": [47.7636, 18.1281],
-    "Levice": [48.2149, 18.6071], "Nové Zámky": [47.9855, 18.1619], "L ala": [48.1512, 17.8718],
-    "Topolcany": [48.5615, 18.1748],
+    "Levice": [48.2149, 18.6071], "Nové Zámky": [47.9855, 18.1619], "Šaľa": [48.1512, 17.8718],
+    "Topoľčany": [48.5615, 18.1748],
     "Žilina": [49.2232, 18.7401], "Bytča": [49.2224, 18.5584], "Kysucké Nové Mesto": [49.3005, 18.7869],
     "Čadca": [49.4381, 18.7897], "Dolný Kubín": [49.2094, 19.2997], "Námestovo": [49.4075, 19.4811],
     "Tvrdošín": [49.3359, 19.5584], "Liptovský Mikuláš": [49.0829, 19.6105], "Martin": [49.0662, 18.9221],
@@ -83,8 +83,8 @@ const districtCoordinates = {
     "Prešov": [49.0018, 21.2393], "Sabinov": [49.1031, 21.0984], "Bardejov": [49.2935, 21.2721],
     "Humenné": [48.9372, 21.9124], "Medzilaborce": [49.2724, 21.9015], "Snina": [48.9884, 22.1524],
     "Kežmarok": [49.1362, 20.4331], "Poprad": [49.0543, 20.3008], "Levoča": [49.0264, 20.5897],
-    "Stará Lubovna": [49.3015, 20.6897], "Stropkov": [49.2024, 21.6521], "Svidník": [49.3048, 21.5712],
-    "Vranov nad Toplou": [48.8884, 21.6841],
+    "Stará Ľubovňa": [49.3015, 20.6897], "Stropkov": [49.2024, 21.6521], "Svidník": [49.3048, 21.5712],
+    "Vranov nad Topľou": [48.8884, 21.6841],
     "Košice I": [48.7200, 21.2500], "Košice II": [48.7000, 21.2400], "Košice III": [48.7300, 21.2700],
     "Košice IV": [48.6900, 21.2800], "Košice - okolie": [48.7152, 21.3262], "Michalovce": [48.7548, 21.9197],
     "Sobrance": [48.7449, 22.1824], "Rožňava": [48.6605, 20.5372], "Spišská Nová Ves": [48.9442, 20.5615],
@@ -146,7 +146,7 @@ function getDefaultDistrictData() {
             "Banská Bystrica": { fte: 14, wpId: null }, "Brezno": { fte: 3, wpId: null }, "Lučenec": { fte: 4, wpId: null },
             "Poltár": { fte: 2, wpId: null }, "Rimavská Sobota": { fte: 5, wpId: null }, "Revúca": { fte: 2, wpId: null },
             "Veľký Krtíš": { fte: 3, wpId: null }, "Zvolen": { fte: 4, wpId: null }, "Detva": { fte: 3, wpId: null },
-            "Krupina": { fte: 2, wpId: null }, "Žiar nad Hronom": { fte: 4, wpId: null }, "Banská L tiavnica": { fte: 2, wpId: null },
+            "Krupina": { fte: 2, wpId: null }, "Žiar nad Hronom": { fte: 4, wpId: null }, "Banská Štiavnica": { fte: 2, wpId: null },
             "Žarnovica": { fte: 4, wpId: null }
         },
         "bratislavsky": {
@@ -165,8 +165,8 @@ function getDefaultDistrictData() {
         },
         "nitra": {
             "Nitra": { fte: 15, wpId: null }, "Zlaté Moravce": { fte: 2, wpId: null }, "Komárno": { fte: 6, wpId: null },
-            "Levice": { fte: 6, wpId: null }, "Nové Zámky": { fte: 8, wpId: null }, "L ala": { fte: 3, wpId: null },
-            "Topolcany": { fte: 5, wpId: null }
+            "Levice": { fte: 6, wpId: null }, "Nové Zámky": { fte: 8, wpId: null }, "Šaľa": { fte: 3, wpId: null },
+            "Topoľčany": { fte: 5, wpId: null }
         },
         "zilina": {
             "Žilina": { fte: 16, wpId: null }, "Bytča": { fte: 2, wpId: null }, "Kysucké Nové Mesto": { fte: 2, wpId: null },
@@ -178,8 +178,8 @@ function getDefaultDistrictData() {
             "Prešov": { fte: 17, wpId: null }, "Sabinov": { fte: 2, wpId: null }, "Bardejov": { fte: 4, wpId: null },
             "Humenné": { fte: 5, wpId: null }, "Medzilaborce": { fte: 2, wpId: null }, "Snina": { fte: 3, wpId: null },
             "Kežmarok": { fte: 4, wpId: null }, "Poprad": { fte: 6, wpId: null }, "Levoča": { fte: 2, wpId: null },
-            "Stará Lubovna": { fte: 4, wpId: null }, "Stropkov": { fte: 3, wpId: null }, "Svidník": { fte: 3, wpId: null },
-            "Vranov nad Toplou": { fte: 6, wpId: null }
+            "Stará Ľubovňa": { fte: 4, wpId: null }, "Stropkov": { fte: 3, wpId: null }, "Svidník": { fte: 3, wpId: null },
+            "Vranov nad Topľou": { fte: 6, wpId: null }
         },
         "kosice": {
             "Košice I": { fte: 20, wpId: null }, "Košice - okolie": { fte: 8, wpId: null }, "Michalovce": { fte: 6, wpId: null },
