@@ -51,6 +51,336 @@ function showToast(message, tone = 'info', options = {}) {
     }, 5000);
 }
 
+const auditUiState = {
+    storageKey: 'dp_audit_history_v1',
+    events: [],
+    maxEvents: 300,
+    onboardingCollapsed: false,
+    mergedEvents: [],
+    slovakiaRegionSummaryCollapsed: false,
+    slovakiaRegionExpandedKeys: {}
+};
+
+function loadAuditHistoryFromStorage() {
+    try {
+        const raw = localStorage.getItem(auditUiState.storageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        auditUiState.events = parsed.slice(0, auditUiState.maxEvents);
+    } catch (err) {
+        auditUiState.events = [];
+    }
+}
+
+function saveAuditHistoryToStorage() {
+    try {
+        localStorage.setItem(auditUiState.storageKey, JSON.stringify(auditUiState.events.slice(0, auditUiState.maxEvents)));
+    } catch (err) {
+        // ignore storage errors
+    }
+}
+
+function formatAuditTimestamp(ms) {
+    const stamp = Number(ms || 0);
+    if (!stamp) return '-';
+    const d = new Date(stamp);
+    return d.toLocaleString('sk-SK');
+}
+
+function buildAuditUserLabel(eventItem) {
+    if (eventItem.userEmail) return eventItem.userEmail;
+    if (eventItem.userUid) return eventItem.userUid;
+    return 'lokálne';
+}
+
+function normalizeAuditEvent(eventItem) {
+    if (!eventItem || typeof eventItem !== 'object') return null;
+    return {
+        id: String(eventItem.id || `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+        action: String(eventItem.action || 'unknown'),
+        detail: String(eventItem.detail || ''),
+        regionKey: eventItem.regionKey ? String(eventItem.regionKey) : null,
+        districtName: eventItem.districtName ? String(eventItem.districtName) : null,
+        workplaceId: eventItem.workplaceId ? String(eventItem.workplaceId) : null,
+        userUid: eventItem.userUid ? String(eventItem.userUid) : null,
+        userEmail: eventItem.userEmail ? String(eventItem.userEmail) : null,
+        userRole: eventItem.userRole ? String(eventItem.userRole) : null,
+        createdAtMs: Number(eventItem.createdAtMs || Date.now())
+    };
+}
+
+function addAuditEvent(action, payload = {}) {
+    const access = getAccessContextSafe();
+    const eventItem = normalizeAuditEvent({
+        action,
+        detail: payload.detail || '',
+        regionKey: payload.regionKey || currentRegionKey || null,
+        districtName: payload.districtName || null,
+        workplaceId: payload.workplaceId || null,
+        userUid: access.uid || null,
+        userEmail: access.email || null,
+        userRole: access.role || 'viewer',
+        createdAtMs: Date.now()
+    });
+    if (!eventItem) return;
+
+    auditUiState.events.unshift(eventItem);
+    if (auditUiState.events.length > auditUiState.maxEvents) {
+        auditUiState.events = auditUiState.events.slice(0, auditUiState.maxEvents);
+    }
+    saveAuditHistoryToStorage();
+
+    if (typeof appendAuditEvent === 'function') {
+        appendAuditEvent(eventItem);
+    }
+}
+
+function renderAuditRows(events) {
+    const body = document.getElementById('audit-table-body');
+    if (!body) return;
+
+    if (!events.length) {
+        body.innerHTML = `
+            <tr>
+                <td colspan="5" class="px-3 py-6 text-center text-slate-500">Zatiaľ nie sú dostupné žiadne audit záznamy.</td>
+            </tr>
+        `;
+        return;
+    }
+
+    body.innerHTML = events.map((eventItem) => {
+        const regionLabel = eventItem.regionKey
+            ? (regionMeta[eventItem.regionKey]?.seat || regionMeta[eventItem.regionKey]?.name || eventItem.regionKey)
+            : '-';
+
+        return `
+            <tr>
+                <td class="px-3 py-2 text-slate-600 whitespace-nowrap">${formatAuditTimestamp(eventItem.createdAtMs)}</td>
+                <td class="px-3 py-2 text-slate-700">${buildAuditUserLabel(eventItem)}</td>
+                <td class="px-3 py-2 font-bold text-slate-800 uppercase">${eventItem.action}</td>
+                <td class="px-3 py-2 text-slate-700">${eventItem.detail || '-'}</td>
+                <td class="px-3 py-2 text-slate-700">${regionLabel}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateAuditFilterOptions(events) {
+    const regionSelect = document.getElementById('audit-filter-region');
+    const userSelect = document.getElementById('audit-filter-user');
+    if (!regionSelect || !userSelect) return;
+
+    const prevRegion = regionSelect.value || 'all';
+    const prevUser = userSelect.value || 'all';
+
+    const regionValues = new Set();
+    const userValues = new Set();
+    events.forEach((item) => {
+        if (item.regionKey) regionValues.add(item.regionKey);
+        const userLabel = buildAuditUserLabel(item);
+        if (userLabel) userValues.add(userLabel);
+    });
+
+    const regionOptions = ['<option value="all">Všetky kraje</option>'];
+    Array.from(regionValues)
+        .sort((a, b) => (regionMeta[a]?.seat || a).localeCompare(regionMeta[b]?.seat || b, 'sk'))
+        .forEach((regionKey) => {
+            const label = regionMeta[regionKey]?.seat || regionMeta[regionKey]?.name || regionKey;
+            regionOptions.push(`<option value="${regionKey}">${label}</option>`);
+        });
+    regionSelect.innerHTML = regionOptions.join('');
+
+    const userOptions = ['<option value="all">Všetci používatelia</option>'];
+    Array.from(userValues)
+        .sort((a, b) => a.localeCompare(b, 'sk'))
+        .forEach((userLabel) => {
+            userOptions.push(`<option value="${userLabel}">${userLabel}</option>`);
+        });
+    userSelect.innerHTML = userOptions.join('');
+
+    regionSelect.value = Array.from(regionValues).includes(prevRegion) ? prevRegion : 'all';
+    userSelect.value = Array.from(userValues).includes(prevUser) ? prevUser : 'all';
+}
+
+function getAuditFilteredEvents(events) {
+    const todayOnly = Boolean(document.getElementById('audit-filter-today')?.checked);
+    const regionFilter = document.getElementById('audit-filter-region')?.value || 'all';
+    const userFilter = document.getElementById('audit-filter-user')?.value || 'all';
+
+    let out = [...events];
+
+    if (todayOnly) {
+        const now = new Date();
+        const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        out = out.filter((item) => Number(item.createdAtMs || 0) >= dayStart);
+    }
+
+    if (regionFilter !== 'all') {
+        out = out.filter((item) => item.regionKey === regionFilter);
+    }
+
+    if (userFilter !== 'all') {
+        out = out.filter((item) => buildAuditUserLabel(item) === userFilter);
+    }
+
+    return out;
+}
+
+function applyAuditFiltersAndRender() {
+    const base = auditUiState.mergedEvents || [];
+    const filtered = getAuditFilteredEvents(base).slice(0, 200);
+    renderAuditRows(filtered);
+
+    const status = document.getElementById('audit-status');
+    if (status) {
+        status.textContent = `Zobrazené záznamy: ${filtered.length} / ${base.length}.`;
+    }
+}
+
+function resetAuditFilters() {
+    const today = document.getElementById('audit-filter-today');
+    const region = document.getElementById('audit-filter-region');
+    const user = document.getElementById('audit-filter-user');
+    if (today) today.checked = false;
+    if (region) region.value = 'all';
+    if (user) user.value = 'all';
+    applyAuditFiltersAndRender();
+}
+
+async function refreshAuditModal() {
+    const status = document.getElementById('audit-status');
+    if (status) status.textContent = 'Načítavam históriu...';
+
+    let events = [...auditUiState.events];
+    if (typeof listAuditEvents === 'function') {
+        const cloudEvents = await listAuditEvents(150);
+        if (cloudEvents && cloudEvents.length) {
+            const byId = new Map();
+            [...cloudEvents, ...events].forEach((item) => {
+                const normalized = normalizeAuditEvent(item);
+                if (normalized && !byId.has(normalized.id)) {
+                    byId.set(normalized.id, normalized);
+                }
+            });
+            events = Array.from(byId.values()).sort((a, b) => b.createdAtMs - a.createdAtMs);
+        }
+    }
+
+    auditUiState.mergedEvents = events;
+    updateAuditFilterOptions(events);
+    applyAuditFiltersAndRender();
+}
+
+function pruneAuditLogsNow() {
+    const access = getAccessContextSafe();
+    if (!access.isAuthenticated || access.role !== 'admin') {
+        showToast('Mazanie auditu je dostupné iba pre admina.', 'warning');
+        return;
+    }
+
+    openConfirmModal(
+        'Vymazať staré logy?',
+        'Odstránia sa audit záznamy staršie ako 7 dní.',
+        async (confirmed) => {
+            if (!confirmed) return;
+
+            const status = document.getElementById('audit-status');
+            if (status) status.textContent = 'Prebieha mazanie starých logov...';
+
+            let deletedCount = 0;
+            if (typeof pruneAuditEventsOlderThanRetention === 'function') {
+                deletedCount = Number(await pruneAuditEventsOlderThanRetention(true)) || 0;
+            }
+
+            await refreshAuditModal();
+            showToast(
+                deletedCount > 0
+                    ? `Vymazané staré logy: ${deletedCount}.`
+                    : 'Nenašli sa žiadne logy staršie ako 7 dní.',
+                'success'
+            );
+        },
+        'Vymazať staré',
+        'Zrušiť'
+    );
+}
+
+function openAuditModal() {
+    const access = getAccessContextSafe();
+    if (!access.isAuthenticated || access.role !== 'admin') {
+        showToast('Audit je dostupný iba pre admina.', 'warning');
+        return;
+    }
+
+    const modal = document.getElementById('audit-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    refreshAuditModal();
+}
+
+function closeAuditModal(event) {
+    if (event && event.target && event.target.id !== 'audit-modal') return;
+    const modal = document.getElementById('audit-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+}
+
+window.applyAuditFiltersAndRender = applyAuditFiltersAndRender;
+window.resetAuditFilters = resetAuditFilters;
+window.pruneAuditLogsNow = pruneAuditLogsNow;
+window.toggleSlovakiaRegionSummaryPanel = toggleSlovakiaRegionSummaryPanel;
+window.toggleSlovakiaRegionDetail = toggleSlovakiaRegionDetail;
+
+function toggleOnboardingPanel() {
+    auditUiState.onboardingCollapsed = !auditUiState.onboardingCollapsed;
+    const content = document.getElementById('onboarding-content');
+    const btn = document.getElementById('onboarding-toggle-btn');
+    if (content) content.style.display = auditUiState.onboardingCollapsed ? 'none' : '';
+    if (btn) btn.textContent = auditUiState.onboardingCollapsed ? 'Ukázať' : 'Skryť';
+}
+
+function updateOnboardingPanel() {
+    const card = document.getElementById('onboarding-card');
+    const tip = document.getElementById('onboarding-next-tip');
+    const list = document.getElementById('onboarding-step-list');
+    if (!card || !tip || !list) return;
+
+    const hasRegion = currentRegionKey !== 'slovakia';
+    const regionWorkplaces = Object.values(customWorkplaces || {}).filter((wp) => wp.regionKey === currentRegionKey);
+    const hasDp = hasRegion && regionWorkplaces.length > 0;
+    const hasBrush = Boolean(activeWorkplaceId);
+
+    let assignedCount = 0;
+    if (hasRegion && districtData[currentRegionKey]) {
+        Object.values(districtData[currentRegionKey]).forEach((item) => {
+            if (item?.wpId) assignedCount += 1;
+        });
+    }
+    const hasAssignments = assignedCount > 0;
+
+    const steps = [
+        { done: hasRegion, label: 'Vyberte konkrétny kraj (nie Slovensko).' },
+        { done: hasDp, label: 'Vytvorte aspoň jedno DP.' },
+        { done: hasBrush, label: 'Aktivujte DP ako štetec.' },
+        { done: hasAssignments, label: 'Priraďte okresy do DP klikom na mapu.' }
+    ];
+
+    let nextTip = 'Vyberte konkrétny kraj a začnite modelovať.';
+    if (hasRegion && !hasDp) nextTip = 'Pridajte prvé DP cez tlačidlo + PRIDAŤ DP.';
+    if (hasDp && !hasBrush) nextTip = 'Kliknite na DP vľavo, tým aktivujete štetec.';
+    if (hasBrush && !hasAssignments) nextTip = 'Kliknite do okresov na mape, aby ste ich priradili.';
+    if (hasAssignments) nextTip = 'Skontrolujte kapacity vpravo a prípadne exportujte PNG.';
+
+    tip.textContent = nextTip;
+    list.innerHTML = steps.map((step) => `
+        <div class="flex items-center gap-2 text-[11px] ${step.done ? 'text-emerald-700' : 'text-slate-700'}">
+            <span class="w-4 h-4 rounded-full flex items-center justify-center font-black ${step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${step.done ? '✓' : '•'}</span>
+            <span>${step.label}</span>
+        </div>
+    `).join('');
+}
+
 function toggleAuthForm() {
     const formContainer = document.getElementById('auth-form-container');
     const toggleBtn = document.getElementById('auth-toggle-form-btn');
@@ -87,6 +417,7 @@ async function handleEmailSignIn() {
         document.getElementById('auth-form-container').classList.add('hidden');
         document.getElementById('auth-toggle-form-btn')?.classList.remove('hidden');
         showToast('Prihlásenie úspešné.', 'success');
+        addAuditEvent('sign-in', { detail: 'Používateľ sa prihlásil.' });
     }
 }
 
@@ -172,6 +503,9 @@ async function submitPasswordChange() {
 
 // Allow Enter key to submit the form
 document.addEventListener('DOMContentLoaded', () => {
+    loadAuditHistoryFromStorage();
+    updateOnboardingPanel();
+
     const passwordInput = document.getElementById('auth-password-input');
     if (passwordInput) {
         passwordInput.addEventListener('keypress', (e) => {
@@ -377,6 +711,7 @@ function renderAccessPanel() {
     const reloadBtn = document.getElementById('auth-reload-btn');
     const changePasswordBtn = document.getElementById('auth-change-password-btn');
     const openUserAdminBtn = document.getElementById('open-user-admin-btn');
+    const openAuditBtn = document.getElementById('open-audit-btn');
     const addDpBtn = document.getElementById('add-dp-btn');
     const resetBtn = document.getElementById('reset-model-btn');
     const addDpReason = document.getElementById('add-dp-disabled-reason');
@@ -402,12 +737,11 @@ function renderAccessPanel() {
 
     regionBadge.textContent = access.regionKey || 'all';
     
-    // Handle sign-in form visibility
-    // Note: formContainer visibility is controlled only by toggleAuthForm
-    // renderAccessPanel controls toggle button and sign-out button only
+    // Keep auth controls consistent after redraws (e.g. region switch after failed sign-in).
     if (toggleFormBtn && signOutBtn) {
         const isAuthenticated = access.isAuthenticated;
-        toggleFormBtn.classList.toggle('hidden', isAuthenticated);
+        const isFormOpen = Boolean(formContainer && !formContainer.classList.contains('hidden'));
+        toggleFormBtn.classList.toggle('hidden', isAuthenticated || isFormOpen);
         signOutBtn.classList.toggle('hidden', !isAuthenticated);
         if (reloadBtn) {
             reloadBtn.classList.toggle('hidden', !isAuthenticated);
@@ -424,6 +758,11 @@ function renderAccessPanel() {
     if (openUserAdminBtn) {
         const showForAdmin = access.isAuthenticated && access.role === 'admin';
         openUserAdminBtn.classList.toggle('hidden', !showForAdmin);
+    }
+
+    if (openAuditBtn) {
+        const showForAdmin = access.isAuthenticated && access.role === 'admin';
+        openAuditBtn.classList.toggle('hidden', !showForAdmin);
     }
 
     const canEdit = canEditCurrentRegion();
@@ -506,7 +845,7 @@ function updateEditLockUi() {
 
     if (!canEditCurrentRegion()) {
         lockBtn.textContent = 'Režim úprav: Nedostupný';
-        lockBtn.className = 'w-full ui-btn-secondary text-[11px] py-2 rounded-lg cursor-not-allowed opacity-60';
+        lockBtn.className = 'flex-1 ui-btn-secondary text-xs py-3 px-4 rounded-xl cursor-not-allowed opacity-60';
         lockBtn.disabled = true;
         lockBtn.title = 'Režim úprav je nedostupný pre aktuálny kontext';
         if (lockReason) {
@@ -523,10 +862,10 @@ function updateEditLockUi() {
 
     if (editModeLocked) {
         lockBtn.textContent = 'Režim úprav: Vypnutý';
-        lockBtn.className = 'w-full ui-btn-secondary text-[11px] py-2 rounded-lg';
+        lockBtn.className = 'flex-1 ui-btn-secondary text-xs py-3 px-4 rounded-xl';
     } else {
         lockBtn.textContent = 'Režim úprav: Zapnutý';
-        lockBtn.className = 'w-full ui-btn-primary text-[11px] py-2 rounded-lg';
+        lockBtn.className = 'flex-1 ui-btn-primary text-xs py-3 px-4 rounded-xl';
     }
 }
 
@@ -583,32 +922,9 @@ function renderMapLegend() {
     const list = document.getElementById('map-legend-list');
     if (!legend || !list) return;
 
-    const workplaces = Object.values(customWorkplaces).filter(wp => wp.regionKey === currentRegionKey);
-    if (!workplaces.length) {
-        legend.classList.add('hidden');
-        list.innerHTML = '';
-        return;
-    }
-
-    list.innerHTML = workplaces.map(wp => {
-        let assignedCount = 0;
-        const regionDistricts = districtData[currentRegionKey] || {};
-        Object.values(regionDistricts).forEach(item => {
-            if (item.wpId === wp.id) assignedCount++;
-        });
-
-        return `
-            <div class="flex items-center justify-between gap-2 text-[11px]">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${wp.color}"></span>
-                    <span class="font-semibold text-slate-700 truncate">${wp.name}</span>
-                </div>
-                <span class="text-slate-400 font-bold">${assignedCount}</span>
-            </div>
-        `;
-    }).join('');
-
-    legend.classList.remove('hidden');
+    // Map legend is intentionally disabled in live view; export legend is generated separately.
+    legend.classList.add('hidden');
+    list.innerHTML = '';
 }
 
 function updateDistrictFilterOptions() {
@@ -755,6 +1071,7 @@ function submitCustomConfirm(result) {
 
 function openGuideModal() {
     document.getElementById('guide-modal').style.display = 'flex';
+    addAuditEvent('guide-open', { detail: 'Otvorený návod.' });
 }
 
 function closeGuideModal(event) {
@@ -1035,6 +1352,11 @@ function openAddDPPrompt() {
                 scheduleRegionSave(currentRegionKey);
             }
 
+            addAuditEvent('create-dp', {
+                detail: `Vytvorené DP ${cleanedName}.`,
+                workplaceId: id,
+                regionKey: currentRegionKey
+            });
             showToast(`DP ${cleanedName} bolo vytvorené.`, 'success');
         }
     );
@@ -1088,6 +1410,11 @@ function editWorkplaceName(id) {
                 scheduleRegionSave(currentRegionKey);
             }
 
+            addAuditEvent('rename-dp', {
+                detail: `Premenované DP ${workplace.name} -> ${cleanedName}.`,
+                workplaceId: id,
+                regionKey: currentRegionKey
+            });
             showToast(`DP bolo premenované na ${cleanedName}.`, 'success');
         }
     );
@@ -1151,6 +1478,11 @@ function removeWorkplace(id) {
                 }
             });
 
+            addAuditEvent('remove-dp', {
+                detail: `Odstránené DP ${workplace.name}, dotknuté okresy: ${affectedDistricts.length}.`,
+                workplaceId: id,
+                regionKey: workplace.regionKey
+            });
             showToast(`DP ${workplace.name} bolo odstránené.`, 'danger');
         },
         'Odstrániť',
@@ -1199,6 +1531,11 @@ function editDistrictFte(districtName) {
                 scheduleRegionSave(regionKey);
             }
 
+            addAuditEvent('fte-update', {
+                detail: `Okres ${districtName}: ${currentFte} -> ${newFte} FTE.`,
+                districtName,
+                regionKey
+            });
             showToast(`Kapacita okresu ${districtName} upravená na ${newFte} FTE.`, 'success');
         }
     );
@@ -1206,6 +1543,7 @@ function editDistrictFte(districtName) {
 
 function redrawUiAndStats() {
     updateDashboardWidgets();
+    updateSlovakiaRegionSummaryPanel();
     renderAccessPanel();
     updateBrushStatusUi();
     updateEditLockUi();
@@ -1213,13 +1551,123 @@ function redrawUiAndStats() {
     renderLeftWorkplaceList();
     renderRightCapacityList();
     renderMapLegend();
-    updateMapBrushWarning();
     updateMapActiveBrushIndicator();
     updateUndoButtonState();
+    updateOnboardingPanel();
+}
+
+function toggleSlovakiaRegionSummaryPanel() {
+    auditUiState.slovakiaRegionSummaryCollapsed = !auditUiState.slovakiaRegionSummaryCollapsed;
+    updateSlovakiaRegionSummaryPanel();
+}
+
+function toggleSlovakiaRegionDetail(regionKey) {
+    if (!regionKey) return;
+    auditUiState.slovakiaRegionExpandedKeys[regionKey] = !auditUiState.slovakiaRegionExpandedKeys[regionKey];
+    updateSlovakiaRegionSummaryPanel();
+}
+
+function updateSlovakiaRegionSummaryPanel() {
+    const panel = document.getElementById('slovakia-region-summary-panel');
+    const content = document.getElementById('slovakia-region-summary-content');
+    const rows = document.getElementById('slovakia-region-summary-rows');
+    const toggleBtn = document.getElementById('slovakia-region-summary-toggle-btn');
+    if (!panel || !content || !rows || !toggleBtn) return;
+
+    const showPanel = currentRegionKey === 'slovakia';
+    panel.classList.toggle('hidden', !showPanel);
+    if (!showPanel) return;
+
+    content.style.display = auditUiState.slovakiaRegionSummaryCollapsed ? 'none' : '';
+    toggleBtn.textContent = auditUiState.slovakiaRegionSummaryCollapsed ? 'Ukázať' : 'Skryť';
+    if (auditUiState.slovakiaRegionSummaryCollapsed) return;
+
+    const municipalityDataLoaded = typeof districtMunicipalityCounts !== 'undefined'
+        && districtMunicipalityCounts
+        && Object.keys(districtMunicipalityCounts).length > 0;
+
+    const regionRows = Object.keys(regionMeta || {})
+        .map((regionKey) => {
+            const districtMap = districtData[regionKey] || {};
+            const districtByNorm = new Map();
+            let districtCount = 0;
+            let municipalityCount = 0;
+
+            Object.keys(districtMap).forEach((districtName) => {
+                const norm = normalizeDistrictName(districtName);
+                if (districtByNorm.has(norm)) return;
+                districtByNorm.set(norm, districtName);
+                districtCount += 1;
+
+                if (municipalityDataLoaded && typeof getDistrictMunicipalityCount === 'function') {
+                    const m = Number(getDistrictMunicipalityCount(districtName));
+                    if (Number.isFinite(m) && m > 0) municipalityCount += m;
+                }
+            });
+
+            const districts = Array.from(districtByNorm.values())
+                .map((districtName) => {
+                    let municipality = null;
+                    if (municipalityDataLoaded && typeof getDistrictMunicipalityCount === 'function') {
+                        const m = Number(getDistrictMunicipalityCount(districtName));
+                        municipality = Number.isFinite(m) && m > 0 ? m : 0;
+                    }
+                    return { districtName, municipality };
+                })
+                .sort((a, b) => a.districtName.localeCompare(b.districtName, 'sk'));
+
+            return {
+                regionKey,
+                label: regionMeta[regionKey]?.seat || regionMeta[regionKey]?.name || regionKey,
+                districtCount,
+                municipalityCount: municipalityDataLoaded ? municipalityCount : null,
+                districts
+            };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label, 'sk'));
+
+    if (!regionRows.length) {
+        rows.innerHTML = '<div class="py-2 text-[11px] text-slate-500">Nie sú dostupné regionálne údaje.</div>';
+        return;
+    }
+
+    rows.innerHTML = `${municipalityDataLoaded ? '' : '<div class="mb-1 px-1 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded">Načítavam počty obcí...</div>'}` + regionRows.map((item) => {
+        const expanded = Boolean(auditUiState.slovakiaRegionExpandedKeys[item.regionKey]);
+        const districtsHtml = expanded
+            ? (item.districts.length
+                ? item.districts.map((districtItem) => `
+                    <div class="grid grid-cols-[1fr_auto] gap-x-2 py-0.5 text-[10px]">
+                        <span class="text-slate-600 truncate" title="${districtItem.districtName}">${districtItem.districtName}</span>
+                        <span class="font-semibold text-slate-700 text-right">${districtItem.municipality === null ? '...' : districtItem.municipality}</span>
+                    </div>
+                `).join('')
+                : '<div class="py-1 text-[10px] text-slate-500">Žiadne okresy.</div>')
+            : '';
+
+        return `
+            <div class="border-b border-slate-100 last:border-b-0 py-1">
+                <div class="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center text-[11px]">
+                    <button type="button" onclick="toggleSlovakiaRegionDetail('${item.regionKey}')" class="text-left font-semibold text-slate-700 hover:text-slate-900 truncate" title="${expanded ? 'Skryť okresy' : 'Zobraziť okresy'}">
+                        <span class="inline-block w-4 text-slate-500">${expanded ? '▾' : '▸'}</span>${item.label}
+                    </button>
+                    <span class="font-bold text-slate-700 text-right">${item.districtCount}</span>
+                    <span class="font-bold text-slate-700 text-right">${item.municipalityCount === null ? '...' : item.municipalityCount}</span>
+                </div>
+                ${expanded ? `<div class="mt-1 ml-4 pl-2 border-l border-slate-200">${districtsHtml}</div>` : ''}
+            </div>
+        `;
+    }).join('');
 }
 
 function updateDashboardWidgets() {
-    document.getElementById('active-map-kraj-badge').innerText = (currentRegionKey === 'slovakia') ? 'Slovensko' : (regionMeta[currentRegionKey]?.name.replace("ý kraj", "") || "Vybraný");
+    const activeRegionBadge = document.getElementById('active-map-kraj-badge');
+    if (activeRegionBadge) {
+        const regionLabel = (currentRegionKey === 'slovakia')
+            ? 'Slovensko'
+            : (regionMeta[currentRegionKey]?.name || 'Vybraný kraj');
+        activeRegionBadge.innerText = regionLabel;
+        activeRegionBadge.title = regionLabel;
+    }
 
     let totalRegionalFte = 0;
     let assignedRegionalFte = 0;
@@ -1286,7 +1734,7 @@ function renderLeftWorkplaceList() {
         listContainer.innerHTML = `
             <div class="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs bg-slate-50">
                 <span class="block font-bold text-slate-500">Zatiaľ nie sú vytvorené žiadne DP.</span>
-                <span class="block mt-1">Použite tlačidlo + PRIDAŤ DP.</span>
+                <span class="block mt-1">Použite tlačidlo + VYTVORIŤ DP.</span>
             </div>
         `;
         return;

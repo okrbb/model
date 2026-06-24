@@ -7,6 +7,7 @@ const firebaseSyncState = {
     options: {
         collectionName: 'okr_region_models',
         districtMetaCollectionName: 'district_meta',
+        auditCollectionName: 'audit_logs',
         autoSaveMs: 1000,
         regionLock: null,
         clientId: `web-${Math.random().toString(36).slice(2, 8)}`
@@ -34,6 +35,11 @@ const firebaseSyncState = {
 };
 
 const FIREBASE_DATASET_SEED_VERSION = 1;
+const AUDIT_RETENTION_DAYS = 7;
+const AUDIT_RETENTION_MS = AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const AUDIT_PRUNE_BATCH_SIZE = 100;
+const AUDIT_PRUNE_MAX_BATCHES = 5;
+const AUDIT_PRUNE_INTERVAL_MS = 10 * 60 * 1000;
 const ACCESS_ROLES = {
     ADMIN: 'admin',
     REGION_EDITOR: 'region_editor',
@@ -168,6 +174,10 @@ function getDistrictMetaCollectionRef() {
 
 function getUsersCollectionRef() {
     return firebaseSyncState.db.collection('users');
+}
+
+function getAuditCollectionRef() {
+    return firebaseSyncState.db.collection(firebaseSyncState.options.auditCollectionName || 'audit_logs');
 }
 
 function encodeDistrictMetaDocId(norm) {
@@ -737,8 +747,12 @@ async function requestFirebaseSignOut() {
             searchResult.innerHTML = '';
         }
         
-        renderLeftWorkplaceList();
-        renderRightCapacityList();
+        if (typeof redrawUiAndStats === 'function') {
+            redrawUiAndStats();
+        } else {
+            renderLeftWorkplaceList();
+            renderRightCapacityList();
+        }
         updateSaveIndicator();
         
         showToast('Boli ste úspešne odhlásení.', 'info');
@@ -831,6 +845,110 @@ async function updateFirebaseUserAccess(uid, payload = {}) {
     }
 }
 
+async function appendAuditEvent(payload = {}) {
+    if (!isFirebaseSyncEnabled() || !firebaseSyncState.db) return false;
+
+    const normalized = {
+        action: String(payload.action || 'unknown'),
+        detail: String(payload.detail || ''),
+        regionKey: payload.regionKey ? String(payload.regionKey) : null,
+        districtName: payload.districtName ? String(payload.districtName) : null,
+        workplaceId: payload.workplaceId ? String(payload.workplaceId) : null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAtMs: Number(payload.createdAtMs || Date.now()),
+        clientId: firebaseSyncState.options.clientId,
+        userUid: firebaseSyncState.access.uid || null,
+        userEmail: firebaseSyncState.access.email || null,
+        userRole: firebaseSyncState.access.role || ACCESS_ROLES.VIEWER
+    };
+
+    try {
+        await getAuditCollectionRef().add(normalized);
+        return true;
+    } catch (err) {
+        console.error('Firebase audit append failed', err);
+        return false;
+    }
+}
+
+async function pruneAuditEventsOlderThanRetention(force = false) {
+    if (!isFirebaseSyncEnabled() || !firebaseSyncState.db) return 0;
+    if (firebaseSyncState.access.role !== ACCESS_ROLES.ADMIN) return 0;
+
+    const now = Date.now();
+    if (firebaseSyncState.auditPruneInFlight) return 0;
+    if (!force && firebaseSyncState.lastAuditPruneAt && (now - firebaseSyncState.lastAuditPruneAt) < AUDIT_PRUNE_INTERVAL_MS) {
+        return 0;
+    }
+
+    firebaseSyncState.auditPruneInFlight = true;
+    const cutoffMs = now - AUDIT_RETENTION_MS;
+    let deletedCount = 0;
+
+    try {
+        for (let i = 0; i < AUDIT_PRUNE_MAX_BATCHES; i += 1) {
+            const snapshot = await getAuditCollectionRef()
+                .where('createdAtMs', '<', cutoffMs)
+                .limit(AUDIT_PRUNE_BATCH_SIZE)
+                .get();
+
+            if (!snapshot || snapshot.empty) break;
+
+            const batch = firebaseSyncState.db.batch();
+            snapshot.forEach((doc) => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+
+            deletedCount += snapshot.size;
+            if (snapshot.size < AUDIT_PRUNE_BATCH_SIZE) break;
+        }
+    } catch (err) {
+        console.error('Firebase audit prune failed', err);
+    } finally {
+        firebaseSyncState.lastAuditPruneAt = now;
+        firebaseSyncState.auditPruneInFlight = false;
+    }
+
+    return deletedCount;
+}
+
+async function listAuditEvents(limitCount = 120) {
+    if (!isFirebaseSyncEnabled() || !firebaseSyncState.db) return [];
+
+    const safeLimit = Math.max(1, Math.min(300, Number(limitCount) || 120));
+    try {
+        await pruneAuditEventsOlderThanRetention(false);
+
+        const snapshot = await getAuditCollectionRef()
+            .orderBy('createdAtMs', 'desc')
+            .limit(safeLimit)
+            .get();
+
+        const events = [];
+        snapshot.forEach((doc) => {
+            const data = doc.data() || {};
+            events.push({
+                id: doc.id,
+                action: data.action || 'unknown',
+                detail: data.detail || '',
+                regionKey: data.regionKey || null,
+                districtName: data.districtName || null,
+                workplaceId: data.workplaceId || null,
+                userUid: data.userUid || null,
+                userEmail: data.userEmail || null,
+                userRole: data.userRole || null,
+                createdAtMs: Number(data.createdAtMs || 0)
+            });
+        });
+
+        return events;
+    } catch (err) {
+        console.error('Firebase audit list failed', err);
+        return [];
+    }
+}
+
 function subscribeAccessContext(listener) {
     if (typeof listener !== 'function') return function () {};
     firebaseSyncState.accessListeners.push(listener);
@@ -912,3 +1030,6 @@ window.requestFirebasePasswordChange = requestFirebasePasswordChange;
 window.subscribeAccessContext = subscribeAccessContext;
 window.listFirebaseUsers = listFirebaseUsers;
 window.updateFirebaseUserAccess = updateFirebaseUserAccess;
+window.appendAuditEvent = appendAuditEvent;
+window.listAuditEvents = listAuditEvents;
+window.pruneAuditEventsOlderThanRetention = pruneAuditEventsOlderThanRetention;

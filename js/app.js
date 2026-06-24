@@ -86,6 +86,14 @@ function undoLastAction() {
             touched.forEach(regionKey => scheduleRegionSave(regionKey));
         }
     }
+
+    if (typeof addAuditEvent === 'function') {
+        addAuditEvent('undo', {
+            detail: `Vrátená akcia typu ${lastAction.type || 'unknown'}.`,
+            districtName: lastAction.districtName || null,
+            regionKey: lastAction.workplace?.regionKey || getRegionKeyForDistrict(lastAction.districtName) || currentRegionKey
+        });
+    }
 }
 
 async function loadMunicipalityCountsFromLocalFiles() {
@@ -152,7 +160,11 @@ async function fetchMunicipalityCounts() {
         const cloud = await loadDistrictMetaFromCloud({ silent: true });
         if (cloud.loaded && Object.keys(cloud.counts || {}).length > 0) {
             districtMunicipalityCounts = cloud.counts;
-            renderRightCapacityList();
+            if (typeof redrawUiAndStats === 'function') {
+                redrawUiAndStats();
+            } else {
+                renderRightCapacityList();
+            }
             return;
         }
     }
@@ -160,7 +172,11 @@ async function fetchMunicipalityCounts() {
     const localCounts = await loadMunicipalityCountsFromLocalFiles();
     if (localCounts) {
         districtMunicipalityCounts = localCounts;
-        renderRightCapacityList();
+        if (typeof redrawUiAndStats === 'function') {
+            redrawUiAndStats();
+        } else {
+            renderRightCapacityList();
+        }
         return;
     }
 
@@ -748,6 +764,13 @@ function resetModelData() {
 
                     if (typeof scheduleSaveForAllRegions === 'function') {
                         scheduleSaveForAllRegions();
+                    }
+
+                    if (typeof addAuditEvent === 'function') {
+                        addAuditEvent('reset-model', {
+                            detail: 'Kompletný reset modelu potvrdený a vykonaný.',
+                            regionKey: 'slovakia'
+                        });
                     }
 
                     openPromptModal('Reset dokončený', 'Mapa bola úplne resetovaná na pôvodný stav. Všetky dáta boli vymazané.', 'info');

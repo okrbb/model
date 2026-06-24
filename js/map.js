@@ -526,6 +526,14 @@ function handleDistrictClick(districtName) {
             previousWpId: currentWp,
             nextWpId: null
         });
+        if (typeof addAuditEvent === 'function') {
+            addAuditEvent('district-unassign', {
+                detail: `Okres ${districtName} odpojený od DP.`,
+                districtName,
+                regionKey: rKey,
+                workplaceId: currentWp
+            });
+        }
         showToast(`Okres ${districtName} bol odpojený od DP.`, 'info');
     } else {
         setDistrictWorkplaceId(districtName, activeWorkplaceId);
@@ -536,6 +544,14 @@ function handleDistrictClick(districtName) {
             nextWpId: activeWorkplaceId
         });
         const assignedName = customWorkplaces[activeWorkplaceId]?.name || 'DP';
+        if (typeof addAuditEvent === 'function') {
+            addAuditEvent('district-assign', {
+                detail: `Okres ${districtName} priradený do ${assignedName}.`,
+                districtName,
+                regionKey: rKey,
+                workplaceId: activeWorkplaceId
+            });
+        }
         showToast(`Okres ${districtName} priradený do ${assignedName}.`, 'success');
     }
 
