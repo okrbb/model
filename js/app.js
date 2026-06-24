@@ -180,18 +180,14 @@ function loadScript(src) {
     });
 }
 
-function buildExportLegendData(exportWhole) {
+function buildExportLegendGroups(exportWhole) {
     const scopeRegionKeys = exportWhole ? Object.keys(districtData) : [currentRegionKey];
-    const items = [];
+    const groups = [];
 
-    scopeRegionKeys.forEach((rKey, regionIndex) => {
-        if (exportWhole) {
-            items.push({
-                kind: 'region-header',
-                label: `kraj ${regionMeta[rKey]?.seat || regionMeta[rKey]?.name || rKey}`,
-                regionKey: rKey
-            });
-        }
+    scopeRegionKeys.forEach((rKey) => {
+        const groupTitle = exportWhole
+            ? `kraj ${regionMeta[rKey]?.seat || regionMeta[rKey]?.name || rKey}`
+            : `kraj ${regionMeta[rKey]?.name || rKey}`;
 
         const legendByWpId = {};
         const districts = districtData[rKey] || {};
@@ -209,8 +205,7 @@ function buildExportLegendData(exportWhole) {
                     fte: 0,
                     municipalities: 0,
                     municipalitiesKnown: false,
-                    regionKey: rKey,
-                    regionOrder: regionIndex
+                    regionKey: rKey
                 };
             }
 
@@ -222,25 +217,15 @@ function buildExportLegendData(exportWhole) {
             }
         });
 
-        const regionItems = Object.values(legendByWpId).sort((a, b) => a.name.localeCompare(b.name, 'sk'));
-        items.push(...regionItems);
-
-        if (exportWhole && regionIndex < scopeRegionKeys.length - 1 && regionItems.length) {
-            items.push({ kind: 'region-gap' });
-        }
+        const entries = Object.values(legendByWpId).sort((a, b) => a.name.localeCompare(b.name, 'sk'));
+        groups.push({
+            regionKey: rKey,
+            title: groupTitle,
+            entries
+        });
     });
 
-    const totals = items.reduce((acc, item) => {
-        if (item.kind === 'region-gap') return acc;
-        acc.fte += item.fte;
-        if (item.municipalitiesKnown) {
-            acc.municipalities += item.municipalities;
-            acc.hasMunicipalityData = true;
-        }
-        return acc;
-    }, { fte: 0, municipalities: 0, hasMunicipalityData: false });
-
-    return { items, totals };
+    return groups;
 }
 
 function fitLegendName(ctx, text, maxWidth) {
@@ -253,125 +238,351 @@ function fitLegendName(ctx, text, maxWidth) {
     return `${out}...`;
 }
 
-function composeExportCanvasWithLegend(mapCanvas, exportWhole) {
-    const { items, totals } = buildExportLegendData(exportWhole);
-    if (!items.length) return mapCanvas;
+function flattenLegendGroupsToRows(groups) {
+    const rows = [];
 
-    const targetHeight = mapCanvas.height;
-    const titleHeight = 26;
-    const headerHeight = 20;
-    const footerHeight = 26;
-    const verticalPadding = 16;
-    const rowHeight = 17;
-    const availableRowsHeight = targetHeight - (verticalPadding * 2) - titleHeight - headerHeight - footerHeight;
-    const maxRowsPerColumn = Math.max(1, Math.floor(availableRowsHeight / rowHeight));
-    const columnCount = Math.max(1, Math.ceil(items.length / maxRowsPerColumn));
-    const columnWidth = 220;
-    const legendWidth = 24 + (columnCount * columnWidth);
+    groups.forEach((group, idx) => {
+        rows.push({ kind: 'region-header', label: group.title });
+
+        if (!group.entries.length) {
+            rows.push({ kind: 'empty', label: 'bez DP' });
+        } else {
+            group.entries.forEach((entry) => rows.push({ kind: 'entry', entry }));
+        }
+
+        if (idx < groups.length - 1) rows.push({ kind: 'gap' });
+    });
+
+    return rows;
+}
+
+function composeExportCanvasWithLegend(mapCanvas, exportWhole) {
+    const groups = buildExportLegendGroups(exportWhole);
+    if (!groups.length) return mapCanvas;
+
+    if (!exportWhole) {
+        // Region export: keep legend on the right, but with a wider stripe.
+        const regionGroup = groups[0] || { entries: [] };
+        const rows = regionGroup.entries.length
+            ? regionGroup.entries.map((entry) => ({ kind: 'entry', entry }))
+            : [{ kind: 'empty', label: 'bez DP' }];
+        const titleHeight = 44;
+        const headerHeight = 22;
+        const verticalPadding = 18;
+        const rowHeight = 30;
+        const columnGap = 20;
+        const columnWidth = 420;
+        const baseInset = 24;
+        const obceRightInset = 38;
+        const fteObceGap = 64;
+
+        const availableRowsHeight = mapCanvas.height - (verticalPadding * 2) - titleHeight - headerHeight - 10;
+        const maxRowsPerColumn = Math.max(1, Math.floor(availableRowsHeight / rowHeight));
+        const columnCount = Math.max(1, Math.ceil(rows.length / maxRowsPerColumn));
+        const legendWidth = (baseInset * 2) + (columnCount * columnWidth) + ((columnCount - 1) * columnGap);
+
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = mapCanvas.width + legendWidth;
+        outCanvas.height = mapCanvas.height;
+
+        const ctx = outCanvas.getContext('2d');
+        ctx.drawImage(mapCanvas, 0, 0);
+
+        const legendX = mapCanvas.width;
+        const legendY = 0;
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(legendX, legendY, legendWidth, outCanvas.height);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(legendX + 0.5, 0);
+        ctx.lineTo(legendX + 0.5, outCanvas.height);
+        ctx.stroke();
+
+        const scopeLabel = (regionMeta[currentRegionKey]?.name || 'AKTUALNY KRAJ').toUpperCase();
+        const baseX = legendX + baseInset;
+        let y = legendY + verticalPadding + 6;
+
+        ctx.fillStyle = '#475569';
+        ctx.font = '800 20px Inter, sans-serif';
+        ctx.fillText(`LEGENDA DP - ${scopeLabel}`, baseX, y);
+        y += titleHeight;
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = '700 15px Inter, sans-serif';
+        for (let col = 0; col < columnCount; col++) {
+            const colX = baseX + (col * (columnWidth + columnGap));
+            const obceX = colX + columnWidth - obceRightInset;
+            const fteX = obceX - fteObceGap;
+            ctx.fillText('DP', colX, y);
+            ctx.fillText('FTE', fteX, y);
+            ctx.fillText('OBCE', obceX, y);
+        }
+
+        y += 10;
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.beginPath();
+        ctx.moveTo(baseX, y);
+        ctx.lineTo(baseX + (columnCount * (columnWidth + columnGap)) - columnGap, y);
+        ctx.stroke();
+
+        const firstRowY = y + 18;
+        let virtualRow = 0;
+
+        rows.forEach((rowData) => {
+            const col = Math.floor(virtualRow / maxRowsPerColumn);
+            const row = virtualRow % maxRowsPerColumn;
+            const colX = baseX + (col * (columnWidth + columnGap));
+            const rowY = firstRowY + (row * rowHeight);
+
+            if (rowData.kind === 'region-header') {
+                ctx.fillStyle = '#0f172a';
+                ctx.font = '800 15px Inter, sans-serif';
+                ctx.fillText(rowData.label, colX, rowY);
+
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.beginPath();
+                ctx.moveTo(colX, rowY + 4);
+                ctx.lineTo(colX + columnWidth, rowY + 4);
+                ctx.stroke();
+
+                virtualRow += 1;
+                return;
+            }
+
+            if (rowData.kind === 'gap') {
+                virtualRow += 1;
+                return;
+            }
+
+            if (rowData.kind === 'empty') {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '600 17px Inter, sans-serif';
+                ctx.fillText('bez DP', colX, rowY);
+                virtualRow += 1;
+                return;
+            }
+
+            const entry = rowData.entry;
+            ctx.beginPath();
+            ctx.fillStyle = entry.color;
+            ctx.arc(colX + 6, rowY - 5, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = '600 17px Inter, sans-serif';
+            const obceX = colX + columnWidth - obceRightInset;
+            const fteX = obceX - fteObceGap;
+            const fittedName = fitLegendName(ctx, entry.name, columnWidth - (obceRightInset + 110));
+            ctx.fillText(fittedName, colX + 20, rowY);
+            ctx.fillText(String(entry.fte), fteX, rowY);
+            ctx.fillText(entry.municipalitiesKnown ? String(entry.municipalities) : '-', obceX, rowY);
+
+            virtualRow += 1;
+        });
+
+        ctx.textAlign = 'left';
+        return outCanvas;
+    }
+
+    // Slovakia export: fixed side legends (left/right) with map in the center.
+    const groupByKey = new Map(groups.map((group) => [group.regionKey, group]));
+    const orderedLeft = ['bratislavsky', 'trnava', 'nitra', 'trencin'];
+    const orderedRight = ['banska-bystrica', 'zilina', 'kosice', 'presov'];
+
+    const ensureGroup = (regionKey) => {
+        if (groupByKey.has(regionKey)) return groupByKey.get(regionKey);
+        const fallbackTitle = `kraj ${regionMeta[regionKey]?.seat || regionMeta[regionKey]?.name || regionKey}`;
+        return { regionKey, title: fallbackTitle, entries: [] };
+    };
+
+    const leftGroups = orderedLeft.map(ensureGroup);
+    const rightGroups = orderedRight.map(ensureGroup);
+
+    const panelPadding = 16;
+    const sideTitleHeight = 24;
+    const sideTitleGap = 12;
+    const panelColumnGap = 14;
+    const panelRowGap = 14;
+    const cardInnerPaddingX = 10;
+    const cardInnerPaddingY = 10;
+    const cardHeaderHeight = 20;
+    const cardColumnsHeaderHeight = 17;
+    const cardRowHeight = 20;
+
+    const panelWidth = Math.max(520, Math.floor(mapCanvas.width * 0.48));
+    const cardWidth = Math.floor((panelWidth - (panelPadding * 2) - panelColumnGap) / 2);
+    const cardAreaTop = panelPadding + sideTitleHeight + sideTitleGap;
+    const cardHeight = Math.floor((mapCanvas.height - cardAreaTop - panelPadding - panelRowGap) / 2);
 
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = mapCanvas.width + legendWidth;
+    outCanvas.width = mapCanvas.width + (panelWidth * 2);
     outCanvas.height = mapCanvas.height;
 
     const ctx = outCanvas.getContext('2d');
-    ctx.drawImage(mapCanvas, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
 
-    const legendX = mapCanvas.width;
+    const leftPanelX = 0;
+    const mapX = panelWidth;
+    const rightPanelX = panelWidth + mapCanvas.width;
+
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(legendX, 0, legendWidth, outCanvas.height);
+    ctx.fillRect(leftPanelX, 0, panelWidth, outCanvas.height);
+    ctx.fillRect(rightPanelX, 0, panelWidth, outCanvas.height);
+    ctx.drawImage(mapCanvas, mapX, 0);
+
     ctx.strokeStyle = '#cbd5e1';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(legendX + 0.5, 0);
-    ctx.lineTo(legendX + 0.5, outCanvas.height);
+    ctx.moveTo(mapX + 0.5, 0);
+    ctx.lineTo(mapX + 0.5, outCanvas.height);
+    ctx.moveTo(rightPanelX + 0.5, 0);
+    ctx.lineTo(rightPanelX + 0.5, outCanvas.height);
     ctx.stroke();
 
-    const scopeLabel = exportWhole ? 'SLOVENSKA REPUBLIKA' : (regionMeta[currentRegionKey]?.name || 'AKTUALNY KRAJ').toUpperCase();
-    const baseX = legendX + 12;
-    let y = 16;
+    const drawPanel = (panelX, panelTitle, panelGroups) => {
+        ctx.fillStyle = '#475569';
+        ctx.font = '800 17px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(panelTitle, panelX + panelPadding, panelPadding + 16);
 
-    ctx.fillStyle = '#475569';
-    ctx.font = '700 12px Inter, sans-serif';
-    ctx.fillText(`LEGENDA DP - ${scopeLabel}`, baseX, y);
-    y += titleHeight;
+        panelGroups.forEach((group, idx) => {
+            const gridCol = idx % 2;
+            const gridRow = Math.floor(idx / 2);
+            const cardX = panelX + panelPadding + (gridCol * (cardWidth + panelColumnGap));
+            const cardY = cardAreaTop + (gridRow * (cardHeight + panelRowGap));
 
-    ctx.font = '700 11px Inter, sans-serif';
-    ctx.fillStyle = '#64748b';
-    for (let col = 0; col < columnCount; col++) {
-        const colX = baseX + (col * columnWidth);
-        ctx.fillText('DP', colX, y);
-        ctx.fillText('FTE', colX + 138, y);
-        ctx.fillText('OBCE', colX + 170, y);
-    }
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(cardX, cardY, cardWidth, cardHeight);
 
-    y += 10;
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.moveTo(baseX, y);
-    ctx.lineTo(baseX + (columnCount * columnWidth) - 12, y);
-    ctx.stroke();
+            const titleY = cardY + cardInnerPaddingY + 12;
+            const lineY = titleY + 5;
+            const headerY = titleY + cardHeaderHeight;
+            const bodyStartY = headerY + 6;
 
-    const firstRowY = y + 14;
-    ctx.font = '600 11px Inter, sans-serif';
-    ctx.fillStyle = '#0f172a';
-
-    let virtualRow = 0;
-    items.forEach((item) => {
-        if (item.kind === 'region-header') {
-            const rowY = firstRowY + (virtualRow * rowHeight);
             ctx.fillStyle = '#0f172a';
-            ctx.font = '800 12px Inter, sans-serif';
-            ctx.fillText(item.label, baseX, rowY);
+            ctx.font = '800 14px Inter, sans-serif';
+            ctx.fillText(group.title, cardX + cardInnerPaddingX, titleY);
 
             ctx.strokeStyle = '#cbd5e1';
             ctx.beginPath();
-            ctx.moveTo(baseX, rowY + 4);
-            ctx.lineTo(baseX + (columnCount * columnWidth) - 12, rowY + 4);
+            ctx.moveTo(cardX + cardInnerPaddingX, lineY);
+            ctx.lineTo(cardX + cardWidth - cardInnerPaddingX, lineY);
             ctx.stroke();
 
-            virtualRow += 1;
-            return;
-        }
+            const availableEntriesHeight = Math.max(1, cardHeight - (bodyStartY - cardY) - cardInnerPaddingY);
+            const rowsInsideDefault = Math.max(1, Math.floor(availableEntriesHeight / cardRowHeight));
+            const entryCount = Math.max(1, group.entries.length);
+            const innerColumnGap = 12;
+            const compactSingleColumn = entryCount > rowsInsideDefault;
+            const effectiveRowHeight = compactSingleColumn
+                ? Math.max(13, Math.floor(availableEntriesHeight / entryCount))
+                : cardRowHeight;
+            const rowsInside = compactSingleColumn ? entryCount : rowsInsideDefault;
+            const columnsInside = compactSingleColumn ? 1 : Math.max(1, Math.ceil(entryCount / rowsInside));
+            const innerColWidth = Math.floor((cardWidth - (cardInnerPaddingX * 2) - ((columnsInside - 1) * innerColumnGap)) / columnsInside);
 
-        if (item.kind === 'region-gap') {
-            virtualRow += 1;
-            return;
-        }
+            ctx.fillStyle = '#64748b';
+            ctx.font = '700 12px Inter, sans-serif';
+            for (let c = 0; c < columnsInside; c++) {
+                const colX = cardX + cardInnerPaddingX + (c * (innerColWidth + innerColumnGap));
+                const obceX = colX + innerColWidth - 52;
+                const fteX = obceX - 46;
+                ctx.fillText('DP', colX, headerY);
+                ctx.fillText('FTE', fteX, headerY);
+                ctx.fillText('OBCE', obceX, headerY);
+            }
 
-        const col = Math.floor(virtualRow / maxRowsPerColumn);
-        const row = virtualRow % maxRowsPerColumn;
-        const colX = baseX + (col * columnWidth);
-        const rowY = firstRowY + (row * rowHeight);
+            const bodyFontPx = compactSingleColumn ? (effectiveRowHeight <= 14 ? 11 : 12) : 13;
+            ctx.font = `600 ${bodyFontPx}px Inter, sans-serif`;
+            if (!group.entries.length) {
+                ctx.fillStyle = '#64748b';
+                ctx.fillText('bez DP', cardX + cardInnerPaddingX, bodyStartY + effectiveRowHeight);
+                return;
+            }
 
-        ctx.beginPath();
-        ctx.fillStyle = item.color;
-        ctx.arc(colX + 4, rowY - 3, 4, 0, Math.PI * 2);
-        ctx.fill();
+            group.entries.forEach((entry, entryIndex) => {
+                const col = Math.floor(entryIndex / rowsInside);
+                const row = entryIndex % rowsInside;
+                const colX = cardX + cardInnerPaddingX + (col * (innerColWidth + innerColumnGap));
+                const rowY = bodyStartY + ((row + 1) * effectiveRowHeight);
+                const obceX = colX + innerColWidth - 52;
+                const fteX = obceX - 46;
 
-        ctx.fillStyle = '#0f172a';
-        const fittedName = fitLegendName(ctx, item.name, 124);
-        ctx.fillText(fittedName, colX + 14, rowY);
-        ctx.fillText(String(item.fte), colX + 138, rowY);
-        ctx.fillText(item.municipalitiesKnown ? String(item.municipalities) : '-', colX + 170, rowY);
+                ctx.beginPath();
+                ctx.fillStyle = entry.color;
+                const dotRadius = compactSingleColumn ? 4 : 5;
+                ctx.arc(colX + 5, rowY - 4, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
 
-        virtualRow += 1;
-    });
+                ctx.fillStyle = '#0f172a';
+                const nameMaxWidth = Math.max(60, fteX - (colX + 34));
+                const fittedName = fitLegendName(ctx, entry.name, nameMaxWidth);
+                ctx.fillText(fittedName, colX + 16, rowY);
+                ctx.fillText(String(entry.fte), fteX, rowY);
+                ctx.fillText(entry.municipalitiesKnown ? String(entry.municipalities) : '-', obceX, rowY);
+            });
+        });
+    };
 
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.moveTo(baseX, outCanvas.height - 26);
-    ctx.lineTo(baseX + (columnCount * columnWidth) - 12, outCanvas.height - 26);
-    ctx.stroke();
+    drawPanel(leftPanelX, 'LEGENDA DP - ZÁPAD/STRED', leftGroups);
+    drawPanel(rightPanelX, 'LEGENDA DP - STRED/VÝCHOD', rightGroups);
 
-    ctx.font = '700 12px Inter, sans-serif';
-    ctx.fillStyle = '#334155';
-    const totalText = totals.hasMunicipalityData
-        ? `${totals.fte} FTE | ${totals.municipalities} obci`
-        : `${totals.fte} FTE`;
-    ctx.fillText('Spolu', baseX, outCanvas.height - 8);
-    ctx.fillText(totalText, baseX + 68, outCanvas.height - 8);
-
+    ctx.textAlign = 'left';
     return outCanvas;
+}
+
+function cropCanvasBottom(sourceCanvas, pixelsToCrop) {
+    const cropPx = Math.max(0, Math.floor(Number(pixelsToCrop) || 0));
+    if (!cropPx) return sourceCanvas;
+
+    const targetHeight = Math.max(1, sourceCanvas.height - cropPx);
+    if (targetHeight === sourceCanvas.height) return sourceCanvas;
+
+    const croppedCanvas = document.createElement('canvas');
+    croppedCanvas.width = sourceCanvas.width;
+    croppedCanvas.height = targetHeight;
+
+    const croppedCtx = croppedCanvas.getContext('2d');
+    croppedCtx.drawImage(
+        sourceCanvas,
+        0,
+        0,
+        sourceCanvas.width,
+        targetHeight,
+        0,
+        0,
+        sourceCanvas.width,
+        targetHeight
+    );
+
+    return croppedCanvas;
+}
+
+function cropCanvasRect(sourceCanvas, sourceX, sourceY, sourceWidth, sourceHeight) {
+    const sx = Math.max(0, Math.floor(Number(sourceX) || 0));
+    const sy = Math.max(0, Math.floor(Number(sourceY) || 0));
+    const requestedW = Math.max(1, Math.floor(Number(sourceWidth) || 1));
+    const requestedH = Math.max(1, Math.floor(Number(sourceHeight) || 1));
+
+    const maxW = Math.max(1, sourceCanvas.width - sx);
+    const maxH = Math.max(1, sourceCanvas.height - sy);
+    const sw = Math.max(1, Math.min(requestedW, maxW));
+    const sh = Math.max(1, Math.min(requestedH, maxH));
+
+    if (sx === 0 && sy === 0 && sw === sourceCanvas.width && sh === sourceCanvas.height) {
+        return sourceCanvas;
+    }
+
+    const croppedCanvas = document.createElement('canvas');
+    croppedCanvas.width = sw;
+    croppedCanvas.height = sh;
+
+    const croppedCtx = croppedCanvas.getContext('2d');
+    croppedCtx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    return croppedCanvas;
 }
 
 function exportMapAsPng() {
@@ -422,14 +633,53 @@ async function executeMapPngExport(exportWhole) {
         await new Promise(r => setTimeout(r, 1500));
         await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'); 
         
+        const exportScale = 2;
         const mapEl = document.getElementById('real-tactical-map'); 
         const mapCanvas = await html2canvas(mapEl, { 
             useCORS: true, 
             logging: false, 
-            scale: 2 
+            scale: exportScale 
         });
+
+        let cropBottomPx = 0;
+        const attributionEl = mapEl?.querySelector('.leaflet-control-attribution');
+        if (mapEl && attributionEl) {
+            const mapRect = mapEl.getBoundingClientRect();
+            const attributionRect = attributionEl.getBoundingClientRect();
+            const attributionOverlap = Math.max(0, (mapRect.bottom - attributionRect.top) + 2);
+            cropBottomPx = Math.ceil(attributionOverlap * exportScale);
+        }
+
+        let croppedMapCanvas = cropCanvasBottom(mapCanvas, cropBottomPx);
+
+        if (exportWhole && geojsonLayer && mapEl) {
+            const skBounds = L.latLngBounds([]);
+            geojsonLayer.eachLayer((layer) => skBounds.extend(layer.getBounds()));
+
+            if (skBounds.isValid()) {
+                const nw = map.latLngToContainerPoint(skBounds.getNorthWest());
+                const se = map.latLngToContainerPoint(skBounds.getSouthEast());
+                const padPx = 18;
+
+                const left = Math.max(0, Math.floor(Math.min(nw.x, se.x) - padPx));
+                const top = Math.max(0, Math.floor(Math.min(nw.y, se.y) - padPx));
+                const right = Math.min(mapEl.clientWidth, Math.ceil(Math.max(nw.x, se.x) + padPx));
+                const bottom = Math.min(mapEl.clientHeight, Math.ceil(Math.max(nw.y, se.y) + padPx));
+
+                const cropW = Math.max(1, right - left);
+                const cropH = Math.max(1, bottom - top);
+
+                croppedMapCanvas = cropCanvasRect(
+                    croppedMapCanvas,
+                    Math.round(left * exportScale),
+                    Math.round(top * exportScale),
+                    Math.round(cropW * exportScale),
+                    Math.round(cropH * exportScale)
+                );
+            }
+        }
         
-        const canvas = composeExportCanvasWithLegend(mapCanvas, exportWhole);
+        const canvas = composeExportCanvasWithLegend(croppedMapCanvas, exportWhole);
         const dataUrl = canvas.toDataURL('image/png'); 
         const a = document.createElement('a'); 
         a.href = dataUrl; 
