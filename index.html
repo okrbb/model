@@ -87,6 +87,8 @@
 
                 <!-- Admin-only users management -->
                 <button id="open-user-admin-btn" onclick="openUserAdminModal()" class="text-[10px] font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded hidden" title="Správa užívateľov">Užívatelia</button>
+
+                <button id="open-audit-btn" onclick="openAuditModal()" class="text-[10px] font-bold uppercase bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded hidden" title="História zmien">Audit</button>
             </div>
 
             <button onclick="openGuideModal()" class="ui-btn-secondary text-xs px-3 py-2 rounded-xl uppercase tracking-wide">
@@ -125,6 +127,17 @@
 
 
             <div class="space-y-4 panel-sticky-header top-[96px] pt-2 pb-3 border-b border-slate-100">
+                <div id="onboarding-card" class="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[10px] font-black text-blue-800 uppercase tracking-wider font-mono">Kontextová nápoveda</span>
+                        <button id="onboarding-toggle-btn" onclick="toggleOnboardingPanel()" class="text-[10px] font-bold uppercase bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded">Skryť</button>
+                    </div>
+                    <div id="onboarding-content" class="space-y-2">
+                        <div id="onboarding-next-tip" class="text-[11px] text-blue-900 font-semibold"></div>
+                        <div id="onboarding-step-list" class="space-y-1"></div>
+                    </div>
+                </div>
+
                 <div class="flex items-center justify-between">
                     <label class="text-xs font-black text-slate-500 uppercase tracking-wider font-mono">Detašované pracoviská (DP):</label>
                     <button id="add-dp-btn" onclick="openAddDPPrompt()" class="ui-btn-primary text-xs px-3 py-1.5 rounded-lg shadow-md shadow-brand-500/10 flex items-center space-x-1" title="Vytvoriť nové detašované pracovisko">
@@ -309,81 +322,39 @@
 
             <div class="space-y-4 text-xs sm:text-sm text-slate-700 leading-relaxed">
                 <section class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-blue-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">Dôležité: Automatické ukladanie</h4>
-                    <p><strong>Všetky tvoje zmeny sa automaticky ukladajú do databázy.</strong> Nemusíš nič exportovať ani importovať. Zmeny sú trvalé ihneď po ich vykonaní.</p>
+                    <h4 class="font-extrabold text-blue-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">1. Automatické ukladanie</h4>
+                    <p><strong>Všetky zmeny sa ukladajú automaticky.</strong> Nie je potrebné ručné uloženie.</p>
                 </section>
 
                 <section class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">1. Rýchly štart</h4>
-                    <p>Vyber kraj, pridaj aspoň jedno DP, aktivuj ho kliknutím v ľavom zozname a klikaj do okresov na mape. Kliknutím na už priradený okres ho odpojíš.</p>
+                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">2. Rýchly postup</h4>
+                    <p>Vyber kraj, vytvor aspoň jedno DP, aktivuj štetec klikom na DP a priraďuj okresy klikom na mapu.</p>
                 </section>
 
                 <section class="bg-white border border-slate-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">2. Výber a prepínanie krajov</h4>
-                <p>V rozbaľovacom poli ZVOĽTE AKTÍVNY KRAJ si nastavíš pracovný kontext. Pri voľbe Slovenská republika vidíš celé územie, pri voľbe kraja modeluješ konkrétny kraj.</p>
-                    <p class="mt-2">Priradenie okresu je povolené len v aktuálne zvolenom kraji. Zmeny v každom kraji sa ukladajú nezávisle.</p>
+                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">3. Úpravy dát</h4>
+                    <p>Vľavo spravuješ DP (pridať, premenovať, odstrániť). Vpravo upravuješ FTE okresov a používaš filtre.</p>
                 </section>
 
                 <section class="bg-white border border-slate-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">3. Pridanie DP a práca so štetcom</h4>
-                    <p>Tlačidlom <strong>+ PRIDAŤ DP</strong> vytvoríš nové detašované pracovisko. Každé DP má vlastnú farbu (automaticky priradenú) a objaví sa v zozname vľavo. Farby sa nemôžu opakovať v rámci kraja.</p>
-                    <p class="mt-2"><strong>Aktivácia štetca:</strong> Klikni na DP v zozname. Aktívne DP je zvýraznené - do DP môžeš teraz pridávať okresy na mape. Opätovným kliknutím na rovnaké DP štetec vypneš.</p>
-                    <p class="mt-2"><strong>Odstránenie DP:</strong> Ikona koša pri danom DP. Tlačidlom <strong>Vrátiť posledné</strong> obnovíš poslednú zmenu.</p>
-                </section>
-
-                <section class="bg-white border border-slate-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">4. Editovanie kapacít okresov</h4>
-                    <p>V pravom paneli KAPACITY OKRESOV V KRAJI nájdeš zoznam okresov, ich FTE, počet miest a obcí a priradenie k DP. Ikonou ceruzky upravíš základnú kapacitu FTE okresu.</p>
-                    <p class="mt-2">Po zmene sa okamžite aktualizuje prehľad: kapacita, zoskupené v DP a nezaradené. Zoznam môžeš filtrovať na nepriradené alebo podľa konkrétneho DP.</p>
-                </section>
-
-                <section class="bg-white border border-slate-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">5. Orientácia na mape</h4>
-                    <p>Tlačidlo Centrovať kraj priblíži aktuálny kraj. Tlačidlo Slovensko prepne pohľad na celú SR.</p>
-                    <p class="mt-2">Nájazdom myšou na okres sa zobrazí detailný popis: kraj, priradené DP, kapacita FTE a počet miest a obcí.</p>
-                </section>
-
-                <section class="bg-white border border-slate-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">6. Export PNG a príprava na prezentáciu</h4>
-                    <p>Export PNG otvorí voľby pre rozsah (Celá SR alebo Aktuálny kraj). Mapa sa vyexportuje ako obrázok spolu s legendou všetkých DP, ich FTE a počtov obcí.</p>
-                    <p class="mt-2">Ak je aktívne zobrazenie Slovenská republika, voľba Aktuálny kraj je neaktívna.</p>
-                </section>
-
-                <section class="bg-red-50 border border-red-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-red-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">7. Resetovanie modelu (iba Admin)</h4>
-                    <p><strong>⚠️ POZOR:</strong> Reset je <strong>TRVALÝ A NEVRATNÝ</strong> - zmaže všetky detašované pracoviská, priradenia a zmeny!</p>
-                    <p class="mt-2">Reset je dostupný iba pre administrátorov. Po kliknutí na tlačidlo <strong>Reset</strong> sa zobrazí dvoj-stupňové potvrdzovanie:</p>
-                    <p class="mt-2"><strong>1. Krok:</strong> Potvrdzovací dialóg s podrobným varovním. Musíš kliknúť "Pokračovať".</p>
-                    <p class="mt-2"><strong>2. Krok:</strong> Zadaj text "ÁNO" (bez úvodzoviek) aby si potvrdil finálny reset. Bez presného textu sa reset neuskutoční.</p>
-                    <p class="mt-2">Po úspešnom resetovaní sa aplikácia vráti do pôvodného stavu - celá mapa sa vymaže.</p>
-                </section>
-
-                <section class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-emerald-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">8. Automatická synchronizácia a ukladanie</h4>
-                    <p><strong>Všetky zmeny sa automaticky ukladajú do databázy.</strong> Nemusíš sa starať o manuálne exportovanie alebo importovanie.</p>
-                    <p class="mt-2">Zmeny sa synchronizujú bez oneskorenia - keď upravíš kapacitu, pridáš alebo odoberieš DP, alebo priradíš okres, zmena sa v pozadí uloží do databázy.</p>
-                    <p class="mt-2">Pracuj po krokoch: výber kraja -> vytvorenie DP -> priraďovanie okresov.</p>
+                    <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">4. Navigácia a export</h4>
+                    <p>Použi tlačidlá Centrovať kraj alebo Slovensko. Export PNG vytvorí mapu s legendou pre kraj alebo celú SR.</p>
                 </section>
 
                 <section class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-amber-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">9. Prihlasovanie a autentifikácia</h4>
-                    <p><strong>Prezeranie bez prihlásenia:</strong> Všetci používatelia (aj bez prihlásenia) mmôžu vidieť všetky vytvorené DP a modely na mape. Úpravy (vytvorenie nového DP, priraďovanie okresov) vyžadujú prihlásenie.</p>
-                    <p class="mt-2"><strong>Prihlásenie:</strong> Klikni na tlačidlo <strong>Prihlásiť</strong> v pravom hornom rohu, zadaj svoj služobný email a heslo. Po úspešnom prihlásení sa v hornom rohu zobrazí tvoja rola a región (ak je ti pridelený).</p>
-                    <p class="mt-2"><strong>Zmena hesla:</strong> Klikni na tlačidlo <strong>Zmeniť heslo</strong> (viditeľné po prihlásení). Zadaj aktuálne heslo, nové heslo (minimálne 8 znakov) a potvrdenie.</p>
+                    <h4 class="font-extrabold text-amber-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">5. Prihlásenie a roly</h4>
+                    <p>Bez prihlásenia je aplikácia na prezeranie. Úpravy vyžadujú prihlásenie a oprávnenie podľa roly.</p>
+                    <p class="mt-2">Role: <strong>admin</strong> (všetko), <strong>editor kraja</strong> (pridelený kraj), <strong>viewer</strong> (len čítanie).</p>
+                </section>
+
+                <section class="bg-red-50 border border-red-200 rounded-2xl p-4">
+                    <h4 class="font-extrabold text-red-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">6. Reset modelu (iba admin)</h4>
+                    <p><strong>Reset je trvalý a nevratný.</strong> Vymaže DP, priradenia aj úpravy. Potvrdzuje sa v dvoch krokoch.</p>
                 </section>
 
                 <section class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-emerald-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">10. Role a práva prístupu</h4>
-                    <p><strong>Admin:</strong> Má úplný prístup - môže upravovať všetky kraje, správu všetkých detašovaných pracovísk a správu používateľov. Vidí všetky regióny na mape.</p>
-                    <p class="mt-2"><strong>Editor kraja:</strong> Može upravovať iba svoj pridelený región. Po prihlásení sa automaticky prepne na svoj región a nemôže ho zmeniť. Má prístup na editovanie DP a okresov len v svojom kraji.</p>
-                    <p class="mt-2"><strong>Prehliadač (Viewer):</strong> Má iba čítací prístup. Može si prezerať všetky kraje a modely, ale nemôže nič upravovať.</p>
-                </section>
-
-                <section class="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                    <h4 class="font-extrabold text-blue-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">11. Správa používateľov (iba pre Admin)</h4>
-                    <p>Tlačidlo <strong>Spravovať používateľov</strong> je viditeľné iba pre administrátorov. Otvorí zoznam všetkých používateľov s možnosťou zmeny ich rolí a pridelenia regiónov.</p>
-                    <p class="mt-2">Pri každom používateľovi vidíš jeho email, aktuálnu rolu (admin, editor kraja, prehliadač) a pridelený región. Na zmenu klikni na rolu alebo región a ulož zmenu tlačidlom <strong>Uložiť</strong>.</p>
-                    <p class="mt-2">Ak zmeníš rolu na "Editor kraja", musíš prideliť aj konkrétny región. Zmeny sa okamžite prejavia pri ďalšom prihlásení používateľa.</p>
+                    <h4 class="font-extrabold text-emerald-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">7. Audit a onboarding</h4>
+                    <p>Tlačidlo <strong>Audit</strong> zobrazí históriu zmien. V ľavom paneli je kontextová nápoveda s ďalším odporúčaným krokom.</p>
                 </section>
             </div>
         </div>
@@ -448,6 +419,50 @@
             <div class="flex items-center space-x-3 mt-5">
                 <button onclick="closePasswordModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold py-3 px-4 rounded-xl transition-colors">Zrušiť</button>
                 <button onclick="submitPasswordChange()" class="flex-1 bg-brand-500 hover:bg-brand-600 text-white text-xs font-extrabold py-3 px-4 rounded-xl transition-colors">Uložiť heslo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="audit-modal" class="fixed inset-0 bg-slate-900/65 backdrop-blur-sm hidden items-center justify-center z-[100001] p-4" onclick="closeAuditModal(event)">
+        <div class="bg-white rounded-3xl p-6 shadow-2xl w-full max-w-6xl border border-slate-200 max-h-[88vh] overflow-y-auto custom-scrollbar" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between gap-3 mb-5 pb-3 border-b border-slate-200">
+                <div>
+                    <h3 class="text-base sm:text-lg font-black text-slate-800 uppercase tracking-tight">História zmien a audit</h3>
+                    <p id="audit-modal-subtitle" class="text-xs text-slate-500 mt-1">Najnovšie akcie v aplikácii</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button onclick="refreshAuditModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold px-3 py-2 rounded-lg transition-colors">Obnoviť</button>
+                    <button onclick="closeAuditModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold px-3 py-2 rounded-lg transition-colors">Zavrieť</button>
+                </div>
+            </div>
+
+            <div id="audit-status" class="text-xs text-slate-500 mb-3">Načítavam históriu...</div>
+            <div class="mb-3 grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <label class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700">
+                    <input id="audit-filter-today" type="checkbox" class="rounded border-slate-300" onchange="applyAuditFiltersAndRender()">
+                    Len dnešné
+                </label>
+                <select id="audit-filter-region" onchange="applyAuditFiltersAndRender()" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none">
+                    <option value="all">Všetky kraje</option>
+                </select>
+                <select id="audit-filter-user" onchange="applyAuditFiltersAndRender()" class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none">
+                    <option value="all">Všetci používatelia</option>
+                </select>
+                <button onclick="resetAuditFilters()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold px-3 py-2 rounded-lg transition-colors">Reset filtrov</button>
+            </div>
+            <div class="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table class="w-full text-xs">
+                    <thead class="bg-slate-50 text-slate-600 uppercase tracking-wide">
+                        <tr>
+                            <th class="text-left px-3 py-2 font-bold">Čas</th>
+                            <th class="text-left px-3 py-2 font-bold">Používateľ</th>
+                            <th class="text-left px-3 py-2 font-bold">Akcia</th>
+                            <th class="text-left px-3 py-2 font-bold">Detail</th>
+                            <th class="text-left px-3 py-2 font-bold">Kraj</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-table-body" class="divide-y divide-slate-100"></tbody>
+                </table>
             </div>
         </div>
     </div>
