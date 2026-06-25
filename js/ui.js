@@ -58,7 +58,9 @@ const auditUiState = {
     onboardingCollapsed: false,
     mergedEvents: [],
     slovakiaRegionSummaryCollapsed: false,
-    slovakiaRegionExpandedKeys: {}
+    slovakiaRegionExpandedKeys: {},
+    slovakiaWorkplaceSummaryCollapsed: true,
+    slovakiaWorkplaceExpandedKeys: {}
 };
 
 function loadAuditHistoryFromStorage() {
@@ -331,6 +333,8 @@ window.resetAuditFilters = resetAuditFilters;
 window.pruneAuditLogsNow = pruneAuditLogsNow;
 window.toggleSlovakiaRegionSummaryPanel = toggleSlovakiaRegionSummaryPanel;
 window.toggleSlovakiaRegionDetail = toggleSlovakiaRegionDetail;
+window.toggleSlovakiaWorkplaceSummaryPanel = toggleSlovakiaWorkplaceSummaryPanel;
+window.toggleSlovakiaWorkplaceRegionDetail = toggleSlovakiaWorkplaceRegionDetail;
 
 function toggleOnboardingPanel() {
     auditUiState.onboardingCollapsed = !auditUiState.onboardingCollapsed;
@@ -344,6 +348,8 @@ function updateOnboardingPanel() {
     const card = document.getElementById('onboarding-card');
     const tip = document.getElementById('onboarding-next-tip');
     const list = document.getElementById('onboarding-step-list');
+    const progressText = document.getElementById('onboarding-progress-text');
+    const progressFill = document.getElementById('onboarding-progress-fill');
     if (!card || !tip || !list) return;
 
     const hasRegion = currentRegionKey !== 'slovakia';
@@ -354,7 +360,7 @@ function updateOnboardingPanel() {
     let assignedCount = 0;
     if (hasRegion && districtData[currentRegionKey]) {
         Object.values(districtData[currentRegionKey]).forEach((item) => {
-            if (item?.wpId) assignedCount += 1;
+            if (hasValidWorkplaceAssignment(item)) assignedCount += 1;
         });
     }
     const hasAssignments = assignedCount > 0;
@@ -367,12 +373,20 @@ function updateOnboardingPanel() {
     ];
 
     let nextTip = 'Vyberte konkrétny kraj a začnite modelovať.';
-    if (hasRegion && !hasDp) nextTip = 'Pridajte prvé DP cez tlačidlo + PRIDAŤ DP.';
+    if (hasRegion && !hasDp) nextTip = 'Pridajte prvé DP cez tlačidlo Vytvoriť DP.';
     if (hasDp && !hasBrush) nextTip = 'Kliknite na DP vľavo, tým aktivujete štetec.';
     if (hasBrush && !hasAssignments) nextTip = 'Kliknite do okresov na mape, aby ste ich priradili.';
     if (hasAssignments) nextTip = 'Skontrolujte kapacity vpravo a prípadne exportujte PNG.';
 
     tip.textContent = nextTip;
+    const doneCount = steps.filter(step => step.done).length;
+    const progressPercent = Math.round((doneCount / steps.length) * 100);
+    if (progressText) {
+        progressText.textContent = `${doneCount}/${steps.length}`;
+    }
+    if (progressFill) {
+        progressFill.style.width = `${progressPercent}%`;
+    }
     list.innerHTML = steps.map((step) => `
         <div class="flex items-center gap-2 text-[11px] ${step.done ? 'text-emerald-700' : 'text-slate-700'}">
             <span class="w-4 h-4 rounded-full flex items-center justify-center font-black ${step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">${step.done ? '✓' : '•'}</span>
@@ -777,9 +791,9 @@ function renderAccessPanel() {
         if (canEdit) {
             addDpReason.textContent = '';
         } else if (currentRegionKey === 'slovakia') {
-            addDpReason.textContent = 'Pridanie DP je dostupné až po výbere konkrétneho kraja.';
+            addDpReason.textContent = '(!) Pridanie DP je dostupné až po výbere konkrétneho kraja.';
         } else {
-            addDpReason.textContent = 'Nemáte oprávnenie upravovať tento kraj.';
+            addDpReason.textContent = '(!) Nemáte oprávnenie upravovať tento kraj.';
         }
     }
 
@@ -792,7 +806,7 @@ function renderAccessPanel() {
     }
 
     if (resetReason) {
-        resetReason.textContent = access.role === 'admin' ? '' : 'Reset modelu je povolený iba pre admina.';
+        resetReason.textContent = access.role === 'admin' ? '' : '(!) Reset modelu je povolený iba pre admina.';
     }
 }
 
@@ -850,8 +864,8 @@ function updateEditLockUi() {
         lockBtn.title = 'Režim úprav je nedostupný pre aktuálny kontext';
         if (lockReason) {
             lockReason.textContent = currentRegionKey === 'slovakia'
-                ? 'Režim úprav je dostupný až po výbere konkrétneho kraja.'
-                : 'Nemáte oprávnenie upravovať tento kraj.';
+                ? '(!) Režim úprav je dostupný až po výbere konkrétneho kraja.'
+                : '(!) Nemáte oprávnenie upravovať tento kraj.';
         }
         return;
     }
@@ -899,8 +913,8 @@ function updateMapActiveBrushIndicator() {
     if (!indicator) return;
 
     if (!activeWorkplaceId || !customWorkplaces[activeWorkplaceId]) {
-        indicator.textContent = 'Štetec: Žiadny';
-        indicator.className = 'absolute top-16 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 border border-slate-300 text-slate-700 text-xs font-semibold px-4 py-2 rounded-xl shadow-lg pointer-events-none';
+        indicator.textContent = 'Aktívne DP: Žiadne';
+        indicator.className = 'absolute top-[8.9rem] left-4 z-[1000] map-overlay-pill text-slate-700 text-xs font-semibold px-4 py-2 pointer-events-none lg:left-[22.5rem]';
         indicator.style.backgroundColor = '';
         indicator.style.borderColor = '';
         indicator.style.borderWidth = '';
@@ -909,8 +923,8 @@ function updateMapActiveBrushIndicator() {
     }
 
     const activeWp = customWorkplaces[activeWorkplaceId];
-    indicator.textContent = `Štetec: ${activeWp.name}`;
-    indicator.className = 'absolute top-16 left-1/2 -translate-x-1/2 z-[1000] text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-lg pointer-events-none';
+    indicator.textContent = `Aktívne DP: ${activeWp.name}`;
+    indicator.className = 'absolute top-[8.9rem] left-4 z-[1000] map-overlay-pill text-white text-xs font-semibold px-4 py-2 pointer-events-none lg:left-[22.5rem]';
     indicator.style.backgroundColor = activeWp.color;
     indicator.style.borderColor = 'rgba(255,255,255,0.8)';
     indicator.style.borderWidth = '1px';
@@ -1006,7 +1020,25 @@ async function changeRegion() {
     } else if (geojsonLayer) {
         geojsonLayer.eachLayer(layer => geojsonLayer.resetStyle(layer));
     }
+    applyRegionTheme();
     redrawUiAndStats();
+}
+
+function applyRegionTheme() {
+    const regionAccentPalette = {
+        slovakia: '#f97316',
+        'banska-bystrica': '#16a34a',
+        bratislavsky: '#0ea5e9',
+        trnava: '#f97316',
+        trencin: '#22c55e',
+        nitra: '#ef4444',
+        zilina: '#0ea5e9',
+        presov: '#f59e0b',
+        kosice: '#14b8a6'
+    };
+
+    const accent = regionAccentPalette[currentRegionKey] || regionAccentPalette.slovakia;
+    document.documentElement.style.setProperty('--region-accent', accent);
 }
 
 function openPromptModal(title, subtitle, type = 'text', defaultVal = "", callback = null) {
@@ -1109,6 +1141,26 @@ function changeDistrictFilterWorkplace() {
     renderRightCapacityList();
 }
 
+function hasValidWorkplaceAssignment(item) {
+    const wpId = item?.wpId;
+    return Boolean(wpId && customWorkplaces && customWorkplaces[wpId]);
+}
+
+function clearOrphanedDistrictAssignments() {
+    let changed = false;
+
+    Object.values(districtData || {}).forEach((districtMap) => {
+        Object.values(districtMap || {}).forEach((item) => {
+            if (item?.wpId && !customWorkplaces?.[item.wpId]) {
+                item.wpId = null;
+                changed = true;
+            }
+        });
+    });
+
+    return changed;
+}
+
 function normalizeWorkplaceName(name) {
     return String(name || '')
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -1124,12 +1176,12 @@ function normalizeColorValue(color) {
 function ensureRowVisibleInScrollablePanel(row) {
     if (!row) return;
 
-    const panel = row.closest('section.overflow-y-auto');
+    const panel = row.closest('.scroll-panel');
     if (!panel) return;
 
     const panelRect = panel.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    const stickyHeader = panel.querySelector('.panel-sticky-header');
+    const stickyHeader = panel.parentElement?.querySelector('.panel-sticky-header');
     const stickyBottom = stickyHeader
         ? (stickyHeader.getBoundingClientRect().bottom - panelRect.top)
         : 0;
@@ -1299,7 +1351,7 @@ function openAddDPPrompt() {
         for (const dName in districtData[currentRegionKey]) {
             const item = districtData[currentRegionKey][dName];
             totalDistricts++;
-            if (item.wpId) {
+            if (hasValidWorkplaceAssignment(item)) {
                 assignedDistricts++;
             }
         }
@@ -1542,8 +1594,10 @@ function editDistrictFte(districtName) {
 }
 
 function redrawUiAndStats() {
+    clearOrphanedDistrictAssignments();
+    applyRegionTheme();
     updateDashboardWidgets();
-    updateSlovakiaRegionSummaryPanel();
+    updateSlovakiaWorkplaceSummaryPanel();
     renderAccessPanel();
     updateBrushStatusUi();
     updateEditLockUi();
@@ -1565,6 +1619,17 @@ function toggleSlovakiaRegionDetail(regionKey) {
     if (!regionKey) return;
     auditUiState.slovakiaRegionExpandedKeys[regionKey] = !auditUiState.slovakiaRegionExpandedKeys[regionKey];
     updateSlovakiaRegionSummaryPanel();
+}
+
+function toggleSlovakiaWorkplaceSummaryPanel() {
+    auditUiState.slovakiaWorkplaceSummaryCollapsed = !auditUiState.slovakiaWorkplaceSummaryCollapsed;
+    updateSlovakiaWorkplaceSummaryPanel();
+}
+
+function toggleSlovakiaWorkplaceRegionDetail(regionKey) {
+    if (!regionKey) return;
+    auditUiState.slovakiaWorkplaceExpandedKeys[regionKey] = !auditUiState.slovakiaWorkplaceExpandedKeys[regionKey];
+    updateSlovakiaWorkplaceSummaryPanel();
 }
 
 function updateSlovakiaRegionSummaryPanel() {
@@ -1659,6 +1724,164 @@ function updateSlovakiaRegionSummaryPanel() {
     }).join('');
 }
 
+function buildSlovakiaWorkplaceSummaryRows() {
+    const municipalityDataLoaded = typeof districtMunicipalityCounts !== 'undefined'
+        && districtMunicipalityCounts
+        && Object.keys(districtMunicipalityCounts).length > 0;
+
+    return Object.keys(regionMeta || {})
+        .map((regionKey) => {
+            const districts = Object.keys(districtData[regionKey] || {})
+                .map((districtName) => {
+                    let municipality = null;
+                    if (municipalityDataLoaded && typeof getDistrictMunicipalityCount === 'function') {
+                        const loadedCount = Number(getDistrictMunicipalityCount(districtName));
+                        municipality = Number.isFinite(loadedCount) && loadedCount > 0 ? loadedCount : 0;
+                    }
+
+                    return {
+                        districtName,
+                        municipality,
+                        fte: Number(districtData[regionKey][districtName]?.fte || 0),
+                        wpId: districtData[regionKey][districtName]?.wpId || null
+                    };
+                })
+                .sort((a, b) => a.districtName.localeCompare(b.districtName, 'sk'));
+
+            const districtMunicipalityTotal = municipalityDataLoaded
+                ? districts.reduce((acc, item) => acc + Number(item.municipality || 0), 0)
+                : null;
+
+            const workplaces = Object.values(customWorkplaces || {})
+                .filter((wp) => wp.regionKey === regionKey)
+                .map((wp) => {
+                    let districtCount = 0;
+                    let municipalityCount = 0;
+                    let fteCount = 0;
+
+                    districts.forEach((districtItem) => {
+                        if (districtItem.wpId !== wp.id) return;
+
+                        districtCount += 1;
+                        fteCount += Number(districtItem.fte || 0);
+
+                        if (districtItem.municipality !== null) {
+                            municipalityCount += districtItem.municipality;
+                        }
+                    });
+
+                    return {
+                        id: wp.id,
+                        name: wp.name,
+                        color: wp.color,
+                        districtCount,
+                        municipalityCount: municipalityDataLoaded ? municipalityCount : null,
+                        fteCount
+                    };
+                })
+                .sort((a, b) => a.name.localeCompare(b.name, 'sk'));
+
+            const totals = workplaces.reduce((acc, item) => {
+                acc.districtCount += item.districtCount;
+                acc.fteCount += item.fteCount;
+                if (item.municipalityCount !== null) acc.municipalityCount += item.municipalityCount;
+                return acc;
+            }, { districtCount: 0, municipalityCount: 0, fteCount: 0 });
+
+            return {
+                regionKey,
+                label: regionMeta[regionKey]?.seat || regionMeta[regionKey]?.name || regionKey,
+                districts,
+                workplaces,
+                districtCount: districts.length,
+                municipalityCount: districtMunicipalityTotal,
+                fteCount: districts.reduce((acc, item) => acc + Number(item.fte || 0), 0)
+            };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label, 'sk'));
+}
+
+function updateSlovakiaWorkplaceSummaryPanel() {
+    const panel = document.getElementById('slovakia-workplace-summary-panel');
+    const content = document.getElementById('slovakia-workplace-summary-content');
+    const rows = document.getElementById('slovakia-workplace-summary-rows');
+    const toggleBtn = document.getElementById('slovakia-workplace-summary-toggle-btn');
+    if (!panel || !content || !rows || !toggleBtn) return;
+
+    const showPanel = currentRegionKey === 'slovakia';
+    panel.classList.toggle('hidden', !showPanel);
+    if (!showPanel) return;
+
+    content.style.display = auditUiState.slovakiaWorkplaceSummaryCollapsed ? 'none' : '';
+    toggleBtn.textContent = auditUiState.slovakiaWorkplaceSummaryCollapsed ? 'Ukázať' : 'Skryť';
+    if (auditUiState.slovakiaWorkplaceSummaryCollapsed) return;
+
+    const municipalityDataLoaded = typeof districtMunicipalityCounts !== 'undefined'
+        && districtMunicipalityCounts
+        && Object.keys(districtMunicipalityCounts).length > 0;
+    const regionRows = buildSlovakiaWorkplaceSummaryRows();
+
+    if (!regionRows.length) {
+        rows.innerHTML = '<div class="py-2 text-[11px] text-slate-500">Nie sú dostupné regionálne údaje.</div>';
+        return;
+    }
+
+    rows.innerHTML = `${municipalityDataLoaded ? '' : '<div class="mb-1 px-1 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded">Načítavam počty obcí...</div>'}` + regionRows.map((item) => {
+        const expanded = Boolean(auditUiState.slovakiaWorkplaceExpandedKeys[item.regionKey]);
+        const districtsHtml = item.districts.length
+            ? item.districts.map((districtItem) => `
+                <div class="grid grid-cols-[minmax(0,1.5fr)_auto_auto] gap-x-3 py-0.5 text-[10px]">
+                    <span class="text-slate-600 truncate" title="${districtItem.districtName}">${districtItem.districtName}</span>
+                    <span class="font-semibold text-slate-700 text-right">${districtItem.municipality === null ? '...' : districtItem.municipality}</span>
+                    <span class="font-semibold text-slate-700 text-right">${districtItem.fte}</span>
+                </div>
+            `).join('')
+            : '<div class="py-1 text-[10px] text-slate-500">Žiadne okresy.</div>';
+        const workplacesHtml = expanded
+            ? (item.workplaces.length
+                ? item.workplaces.map((workplace) => `
+                    <div class="mt-1 rounded-xl border border-slate-200 bg-slate-50/80 p-2">
+                        <div class="grid grid-cols-[minmax(0,1.4fr)_auto_auto_auto] gap-x-3 items-center text-[10px]">
+                            <span class="font-semibold text-slate-700 truncate flex items-center gap-2" title="${workplace.name}">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full shrink-0" style="background:${workplace.color}"></span>
+                                ${workplace.name}
+                            </span>
+                            <span class="font-bold text-slate-700 text-right">${workplace.districtCount}</span>
+                            <span class="font-bold text-slate-700 text-right">${workplace.municipalityCount === null ? '...' : workplace.municipalityCount}</span>
+                            <span class="font-bold text-slate-700 text-right">${workplace.fteCount}</span>
+                        </div>
+                    </div>
+                `).join('')
+                : '<div class="py-1 text-[10px] text-slate-500">V kraji zatiaľ nie sú vytvorené DP.</div>')
+            : '';
+
+        return `
+            <div class="border-b border-slate-100 last:border-b-0 py-1.5">
+                <div class="grid grid-cols-[minmax(0,1.5fr)_auto_auto_auto] gap-x-3 items-center text-[11px]">
+                    <button type="button" onclick="toggleSlovakiaWorkplaceRegionDetail('${item.regionKey}')" class="text-left font-semibold text-slate-700 hover:text-slate-900 truncate" title="${expanded ? 'Skryť DP' : 'Zobraziť DP'}">
+                        <span class="inline-block w-4 text-slate-500">${expanded ? '▾' : '▸'}</span>${item.label}
+                    </button>
+                    <span class="font-bold text-slate-700 text-right">${item.districtCount}</span>
+                    <span class="font-bold text-slate-700 text-right">${item.municipalityCount === null ? '...' : item.municipalityCount}</span>
+                    <span class="font-bold text-slate-700 text-right">${item.fteCount}</span>
+                </div>
+                ${expanded ? `
+                    <div class="mt-2 ml-4 pl-2 border-l border-slate-200 space-y-2">
+                        <div>
+                            <div class="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500">Okresy v kraji</div>
+                            <div class="rounded-xl border border-slate-200 bg-white px-2 py-1.5">${districtsHtml}</div>
+                        </div>
+                        <div>
+                            <div class="mb-1 text-[10px] font-black uppercase tracking-wide text-slate-500">Detašované pracoviská</div>
+                            ${workplacesHtml}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
 function updateDashboardWidgets() {
     const activeRegionBadge = document.getElementById('active-map-kraj-badge');
     if (activeRegionBadge) {
@@ -1681,7 +1904,7 @@ function updateDashboardWidgets() {
                 processed.add(norm);
                 const item = districtData[rKey][dName];
                 totalRegionalFte += item.fte;
-                if (item.wpId) assignedRegionalFte += item.fte;
+                if (hasValidWorkplaceAssignment(item)) assignedRegionalFte += item.fte;
             }
         }
     } else {
@@ -1694,7 +1917,7 @@ function updateDashboardWidgets() {
 
                 const item = districtData[currentRegionKey][dName];
                 totalRegionalFte += item.fte;
-                if (item.wpId) {
+                if (hasValidWorkplaceAssignment(item)) {
                     assignedRegionalFte += item.fte;
                 }
             }
@@ -1704,6 +1927,15 @@ function updateDashboardWidgets() {
     document.getElementById('current-region-fte-sum').innerText = `${totalRegionalFte} FTE`;
     document.getElementById('current-assigned-fte-sum').innerText = `${assignedRegionalFte} FTE`;
     document.getElementById('current-unassigned-fte-sum').innerText = `${totalRegionalFte - assignedRegionalFte} FTE`;
+    const assignmentPercent = totalRegionalFte > 0 ? Math.round((assignedRegionalFte / totalRegionalFte) * 100) : 0;
+    const progressFill = document.getElementById('model-assignment-progress-fill');
+    const progressLabel = document.getElementById('model-assignment-progress-label');
+    if (progressFill) {
+        progressFill.style.width = `${assignmentPercent}%`;
+    }
+    if (progressLabel) {
+        progressLabel.innerText = `${assignmentPercent}%`;
+    }
     updateWorkflowChips(totalRegionalFte, assignedRegionalFte);
 
     let globalAssignedFte = 0;
@@ -1715,12 +1947,15 @@ function updateDashboardWidgets() {
             processed.add(norm);
 
             const item = districtData[rKey][dName];
-            if (item.wpId) {
+            if (hasValidWorkplaceAssignment(item)) {
                 globalAssignedFte += item.fte;
             }
         }
     }
-    document.getElementById('global-assigned-count').innerText = globalAssignedFte;
+    const globalAssignedCountEl = document.getElementById('global-assigned-count');
+    if (globalAssignedCountEl) {
+        globalAssignedCountEl.innerText = globalAssignedFte;
+    }
 }
 
 function renderLeftWorkplaceList() {
@@ -1734,7 +1969,7 @@ function renderLeftWorkplaceList() {
         listContainer.innerHTML = `
             <div class="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs bg-slate-50">
                 <span class="block font-bold text-slate-500">Zatiaľ nie sú vytvorené žiadne DP.</span>
-                <span class="block mt-1">Použite tlačidlo + VYTVORIŤ DP.</span>
+                <span class="block mt-1">Použite tlačidlo Vytvoriť DP.</span>
             </div>
         `;
         return;
@@ -1806,6 +2041,7 @@ function renderLeftWorkplaceList() {
 
 function renderRightCapacityList() {
     const container = document.getElementById('district-capacity-list');
+    if (!container) return;
     container.innerHTML = '';
     const canEdit = canEditCurrentRegion();
 
@@ -1963,31 +2199,66 @@ function performDistrictSearch() {
     if (!query) {
         searchResult.classList.add('hidden');
         searchResult.innerHTML = '';
+        if (typeof clearDistrictHoverOnMap === 'function') {
+            clearDistrictHoverOnMap();
+        }
+        if (typeof recenterMapAfterDistrictSearchClear === 'function') {
+            recenterMapAfterDistrictSearchClear();
+        }
         return;
     }
     
-    // Search across all regions
+    const normalizedQuery = normalizeDistrictName(query);
+    const searchPool = [];
     let foundDistrict = null;
     let foundRegionKey = null;
-    
+
     for (const regionKey in districtData) {
         for (const districtName in districtData[regionKey]) {
-            if (normalizeDistrictName(districtName).includes(normalizeDistrictName(query))) {
-                foundDistrict = {
-                    name: districtName,
-                    fte: districtData[regionKey][districtName].fte,
-                    wpId: districtData[regionKey][districtName].wpId
-                };
+            const normalizedName = normalizeDistrictName(districtName);
+            const districtItem = {
+                name: districtName,
+                norm: normalizedName,
+                regionKey,
+                fte: districtData[regionKey][districtName].fte,
+                wpId: districtData[regionKey][districtName].wpId
+            };
+            searchPool.push(districtItem);
+
+            if (!foundDistrict && normalizedName.includes(normalizedQuery)) {
+                foundDistrict = districtItem;
                 foundRegionKey = regionKey;
-                break;
             }
         }
-        if (foundDistrict) break;
     }
     
     if (!foundDistrict || !foundRegionKey) {
-        searchResult.innerHTML = `<div class="text-slate-500 font-semibold">Okres nenájdený.</div>`;
+        const suggestions = searchPool
+            .map((item) => {
+                const startsPenalty = item.norm.startsWith(normalizedQuery) ? 0 : 100;
+                const containsPenalty = item.norm.includes(normalizedQuery) ? 0 : 20;
+                const lengthPenalty = Math.abs(item.norm.length - normalizedQuery.length);
+                return { ...item, score: startsPenalty + containsPenalty + lengthPenalty };
+            })
+            .sort((a, b) => a.score - b.score)
+            .slice(0, 3);
+
+        const suggestionHtml = suggestions.length
+            ? `
+                <div class="pt-2 border-t border-slate-200">
+                    <div class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">Skúste podobné názvy</div>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${suggestions.map((item) => `<button type="button" class="search-suggestion-chip" onclick="useDistrictSearchSuggestion('${item.name.replace(/'/g, "\\'")}')">${item.name}</button>`).join('')}
+                    </div>
+                </div>
+            `
+            : '';
+
+        searchResult.innerHTML = `<div class="text-slate-500 font-semibold">Okres nebol nájdený.</div>${suggestionHtml}`;
         searchResult.classList.remove('hidden');
+        if (typeof clearDistrictHoverOnMap === 'function') {
+            clearDistrictHoverOnMap();
+        }
         return;
     }
     
@@ -2009,6 +2280,16 @@ function performDistrictSearch() {
     
     const muniCount = getDistrictMunicipalityCount(foundDistrict.name);
     const muniHtml = muniCount !== null ? `<div class="flex justify-between"><span class="text-slate-600">Mestá a obce:</span><strong class="text-slate-800">${muniCount}</strong></div>` : '';
+
+    if (typeof highlightDistrictOnMapByName === 'function') {
+        highlightDistrictOnMapByName(foundDistrict.name);
+    }
+    if (typeof pulseDistrictOnMapByName === 'function') {
+        pulseDistrictOnMapByName(foundDistrict.name);
+    }
+    if (typeof focusDistrictOnMapByName === 'function') {
+        focusDistrictOnMapByName(foundDistrict.name);
+    }
     
     searchResult.innerHTML = `
         <div class="flex justify-between"><span class="text-slate-600">Okres:</span><strong class="text-slate-800">${foundDistrict.name}</strong></div>
@@ -2020,6 +2301,14 @@ function performDistrictSearch() {
     searchResult.classList.remove('hidden');
 }
 
+function useDistrictSearchSuggestion(districtName) {
+    const searchInput = document.getElementById('district-search-input');
+    if (!searchInput) return;
+
+    searchInput.value = districtName;
+    performDistrictSearch();
+}
+
 function clearDistrictSearch() {
     const searchInput = document.getElementById('district-search-input');
     const searchResult = document.getElementById('district-search-result');
@@ -2028,6 +2317,12 @@ function clearDistrictSearch() {
     if (searchResult) {
         searchResult.classList.add('hidden');
         searchResult.innerHTML = '';
+    }
+    if (typeof clearDistrictHoverOnMap === 'function') {
+        clearDistrictHoverOnMap();
+    }
+    if (typeof recenterMapAfterDistrictSearchClear === 'function') {
+        recenterMapAfterDistrictSearchClear();
     }
 }
 

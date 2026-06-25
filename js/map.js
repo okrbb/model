@@ -2,34 +2,160 @@
 
 let listHoveredDistrictNorm = null;
 
+function hasActiveDistrictSearchHighlight() {
+    return Boolean(listHoveredDistrictNorm);
+}
+
+function applyDistrictSearchDim(layer) {
+    if (!layer) return;
+
+    layer.setStyle({
+        fillOpacity: 0.16,
+        opacity: 0.22
+    });
+}
+
+function applyDistrictSearchHighlight(layer) {
+    if (!layer) return;
+
+    layer.setStyle({
+        color: '#ea580c',
+        weight: 2.4,
+        fillColor: '#fb923c',
+        fillOpacity: 0.96,
+        opacity: 1
+    });
+
+    if (typeof layer.bringToFront === 'function') {
+        layer.bringToFront();
+    }
+}
+
+function applyDistrictPulseFrame(layer, intensity) {
+    if (!layer) return;
+
+    const pulseWeight = 2.4 + (1.3 * intensity);
+    const pulseOpacity = Math.min(1, 0.92 + (0.08 * intensity));
+    layer.setStyle({
+        color: '#f97316',
+        weight: pulseWeight,
+        fillColor: '#fdba74',
+        fillOpacity: pulseOpacity,
+        opacity: 1
+    });
+}
+
 function highlightDistrictOnMapByName(districtName) {
-    if (!geojsonLayer || !districtName) return;
+    if (!geojsonLayer || !districtName) return false;
+
+    clearDistrictHoverOnMap();
 
     listHoveredDistrictNorm = normalizeDistrictName(districtName);
+    let found = false;
 
     geojsonLayer.eachLayer((layer) => {
         const layerDistrict = getFeatureDistrictName(layer.feature);
-        if (normalizeDistrictName(layerDistrict) !== listHoveredDistrictNorm) return;
+        const isTargetDistrict = normalizeDistrictName(layerDistrict) === listHoveredDistrictNorm;
 
-        layer.setStyle({
-            color: '#f97316',
-            weight: 1,
-            fillOpacity: 0.85,
-            opacity: 1
-        });
+        geojsonLayer.resetStyle(layer);
+
+        if (isTargetDistrict) {
+            applyDistrictSearchHighlight(layer);
+            found = true;
+            return;
+        }
+
+        applyDistrictSearchDim(layer);
     });
+
+    return found;
 }
 
 function clearDistrictHoverOnMap() {
     if (!geojsonLayer || !listHoveredDistrictNorm) return;
 
     geojsonLayer.eachLayer((layer) => {
-        const layerDistrict = getFeatureDistrictName(layer.feature);
-        if (normalizeDistrictName(layerDistrict) !== listHoveredDistrictNorm) return;
         geojsonLayer.resetStyle(layer);
     });
 
     listHoveredDistrictNorm = null;
+}
+
+function recenterMapAfterDistrictSearchClear() {
+    if (!map) return false;
+
+    if (currentRegionKey === 'slovakia') {
+        if (typeof recenterToSlovakia === 'function') {
+            recenterToSlovakia();
+            return true;
+        }
+        return false;
+    }
+
+    if (typeof recenterToSelectedRegion === 'function') {
+        recenterToSelectedRegion();
+        return true;
+    }
+
+    return false;
+}
+
+function focusDistrictOnMapByName(districtName) {
+    if (!geojsonLayer || !map || !districtName) return false;
+
+    const districtNorm = normalizeDistrictName(districtName);
+    let targetBounds = null;
+
+    geojsonLayer.eachLayer((layer) => {
+        const layerDistrict = getFeatureDistrictName(layer.feature);
+        if (normalizeDistrictName(layerDistrict) !== districtNorm) return;
+
+        if (typeof layer.getBounds === 'function') {
+            targetBounds = layer.getBounds();
+        }
+    });
+
+    if (!targetBounds || !targetBounds.isValid()) {
+        return false;
+    }
+
+    map.fitBounds(targetBounds, {
+        padding: [90, 90],
+        maxZoom: 9.4,
+        animate: true,
+        duration: 0.8
+    });
+
+    return true;
+}
+
+function pulseDistrictOnMapByName(districtName) {
+    if (!geojsonLayer || !districtName) return false;
+
+    const districtNorm = normalizeDistrictName(districtName);
+    let targetLayer = null;
+
+    geojsonLayer.eachLayer((layer) => {
+        const layerDistrict = getFeatureDistrictName(layer.feature);
+        if (normalizeDistrictName(layerDistrict) === districtNorm) {
+            targetLayer = layer;
+        }
+    });
+
+    if (!targetLayer) return false;
+
+    const pulseFrames = [1, 0.3, 0.9, 0.2, 0.75, 0];
+    pulseFrames.forEach((frame, idx) => {
+        setTimeout(() => {
+            if (idx === pulseFrames.length - 1) {
+                applyDistrictSearchHighlight(targetLayer);
+                return;
+            }
+            applyDistrictPulseFrame(targetLayer, frame);
+        }, idx * 80);
+    });
+
+    return true;
 }
 
 function ensureRegionBorderPanes() {
@@ -240,6 +366,10 @@ function drawMapLayers(krajeData, okresyData) {
                     if (typeof setDistrictListHoverState === 'function') {
                         setDistrictListHoverState(dName, true);
                     }
+                    if (normalizeDistrictName(dName) === listHoveredDistrictNorm) {
+                        applyDistrictSearchHighlight(layer);
+                        return;
+                    }
                     if (currentRegionKey === 'slovakia' || rKey === currentRegionKey) {
                         layer.setStyle({
                             color: "#f97316", weight: 0.3, fillOpacity: 0.8
@@ -249,6 +379,14 @@ function drawMapLayers(krajeData, okresyData) {
                 mouseout: function (e) {
                     if (typeof setDistrictListHoverState === 'function') {
                         setDistrictListHoverState(dName, false);
+                    }
+                    if (normalizeDistrictName(dName) === listHoveredDistrictNorm) {
+                        applyDistrictSearchHighlight(layer);
+                        return;
+                    }
+                    if (hasActiveDistrictSearchHighlight()) {
+                        applyDistrictSearchDim(layer);
+                        return;
                     }
                     geojsonLayer.resetStyle(layer);
                 }
