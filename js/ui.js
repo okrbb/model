@@ -1578,6 +1578,11 @@ function editDistrictFte(districtName) {
             }
             redrawUiAndStats();
 
+            // Aktualizuje text priamo vo vyhľadávacom okienku
+    	    if (typeof performDistrictSearch === 'function') {
+             performDistrictSearch();
+            }
+
             const regionKey = getRegionKeyForDistrict(districtName);
             if (typeof scheduleRegionSave === 'function' && regionKey) {
                 scheduleRegionSave(regionKey);
