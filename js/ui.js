@@ -2291,12 +2291,28 @@ function performDistrictSearch() {
         focusDistrictOnMapByName(foundDistrict.name);
     }
     
+   // Zistenie, či má prihlásený používateľ právo editovať tento kraj
+    const canEdit = canCurrentUserEditRegion(foundRegionKey);
+    
     searchResult.innerHTML = `
         <div class="flex justify-between"><span class="text-slate-600">Okres:</span><strong class="text-slate-800">${foundDistrict.name}</strong></div>
         <div class="flex justify-between"><span class="text-slate-600">Kraj:</span><strong class="text-slate-800">${regionMeta[foundRegionKey] || foundRegionKey}</strong></div>
         <div class="flex justify-between"><span class="text-slate-600">Priradené k DP:</span><strong class="text-slate-800">${workplaceName}</strong></div>
         ${muniHtml}
-        <div class="flex justify-between"><span class="text-slate-600">Kapacita FTE:</span><strong class="text-slate-800">${foundDistrict.fte}</strong></div>
+        <div class="flex justify-between items-center mt-1 pt-1 border-t border-slate-100">
+            <div>
+                <span class="text-slate-600">Kapacita FTE:</span>
+                <strong class="text-slate-800 ml-1">${foundDistrict.fte} FTE</strong>
+            </div>
+            <button onclick="editDistrictFte('${foundDistrict.name.replace(/'/g, "\\'")}')" 
+                    class="bg-white hover:bg-slate-100 text-slate-500 hover:text-brand-500 border border-slate-200 p-1.5 rounded-lg transition-colors shrink-0 ${canEdit ? '' : 'opacity-40 cursor-not-allowed'}" 
+                    ${canEdit ? '' : 'disabled'} 
+                    title="Upraviť FTE okresu">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                </svg>
+            </button>
+        </div>
     `;
     searchResult.classList.remove('hidden');
 }
