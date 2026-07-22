@@ -247,11 +247,6 @@ function applyRegionPayload(regionKey, payload) {
         const existingEntry = districtData[regionKey][targetName];
         let wpIdToUse = existingEntry?.wpId || value?.wpId || null;
         
-        // FIX: For bratislavsky region, reset all wpId to null to fix corruption
-        if (regionKey === 'bratislavsky') {
-            wpIdToUse = null;
-        }
-        
         districtData[regionKey][targetName] = {
             fte: Number(value?.fte || 0),
             wpId: wpIdToUse
