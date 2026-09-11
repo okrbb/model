@@ -171,7 +171,7 @@
                     <span class="font-bold text-slate-800" id="current-region-fte-sum">56 FTE</span>
                 </div>
                     <div class="flex justify-between">
-                    <span class="text-slate-500">Zoskupené v DP:</span>
+                    <span class="text-slate-500">Zoskupené v RP:</span>
                     <span class="font-bold text-emerald-600" id="current-assigned-fte-sum">0 FTE</span>
                 </div>
                 <div class="flex justify-between">
@@ -189,7 +189,7 @@
 
             <div id="slovakia-workplace-summary-panel" class="hidden absolute top-4 left-1/2 -translate-x-[58%] z-[1000] map-overlay-card w-[28rem] font-sans text-xs pointer-events-auto">
                 <div class="flex items-center justify-between gap-2">
-                    <span class="font-extrabold text-slate-800 uppercase tracking-wide">Prehľad krajov a DP</span>
+                    <span class="font-extrabold text-slate-800 uppercase tracking-wide">Prehľad krajov a RP</span>
                     <button id="slovakia-workplace-summary-toggle-btn" onclick="toggleSlovakiaWorkplaceSummaryPanel()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-extrabold px-2 py-1 rounded transition-colors">Skryť</button>
                 </div>
 
@@ -205,7 +205,7 @@
             </div>
 
             <div id="map-active-brush-indicator" class="absolute top-[8.9rem] left-4 z-[1000] map-overlay-pill text-slate-700 text-xs font-semibold px-4 py-2 pointer-events-none lg:left-[22.5rem]">
-                Aktívne DP: Žiadne
+                Aktívne RP: Žiadne
             </div>
 
             <div id="real-tactical-map" class="w-full h-full min-h-[40rem]"></div>
@@ -231,11 +231,11 @@
 
                 <div class="map-floating-card map-panel-right pointer-events-auto space-y-3">
                     <div class="flex items-center justify-center">
-                        <button id="add-dp-btn" onclick="openAddDPPrompt()" class="ui-btn-primary text-xs px-3 py-2 rounded-xl shadow-md shadow-brand-500/10 flex items-center space-x-1" title="Vytvoriť nový región">
-                            <span>Vytvoriť DP</span>
+                        <button id="add-RP-btn" onclick="openAddRPPrompt()" class="ui-btn-primary text-xs px-3 py-2 rounded-xl shadow-md shadow-brand-500/10 flex items-center space-x-1" title="Vytvoriť nový región">
+                            <span>Vytvoriť RP</span>
                         </button>
                     </div>
-                    <div id="add-dp-disabled-reason" class="ui-btn-disabled-hint"></div>
+                    <div id="add-RP-disabled-reason" class="ui-btn-disabled-hint"></div>
 
                     <div class="grid grid-cols-2 gap-3">
                         <button id="undo-action-btn" onclick="undoLastAction()" class="ui-btn-secondary text-xs py-3 px-4 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed" title="Vrátiť poslednú zmenu">Vrátiť zmenu</button>
@@ -326,12 +326,12 @@
 
                 <section class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                     <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">2. Rýchly postup</h4>
-                    <p>Vyber konkrétny kraj, vytvor aspoň jedno DP, aktivuj ho klikom v ľavom paneli a potom priraďuj okresy klikom na mapu.</p>
+                    <p>Vyber konkrétny kraj, vytvor aspoň jedno RP, aktivuj ho klikom v ľavom paneli a potom priraďuj okresy klikom na mapu.</p>
                 </section>
 
                 <section class="bg-white border border-slate-200 rounded-2xl p-4">
                     <h4 class="font-extrabold text-slate-900 uppercase tracking-wide text-[11px] sm:text-xs mb-2">3. Ľavý a pravý panel</h4>
-                    <p>Vľavo spravuješ zoznam DP a vidíš kontextovú nápovedu. Vpravo nájdeš vyhľadávanie okresu a hlavné akcie: vytvorenie DP, vrátenie poslednej zmeny, prepnutie režimu úprav, export mapy a reset.</p>
+                    <p>Vľavo spravuješ zoznam RP a vidíš kontextovú nápovedu. Vpravo nájdeš vyhľadávanie okresu a hlavné akcie: vytvorenie RP, vrátenie poslednej zmeny, prepnutie režimu úprav, export mapy a reset.</p>
                 </section>
 
                 <section class="bg-white border border-slate-200 rounded-2xl p-4">
@@ -353,12 +353,12 @@
 
                 <section class="bg-red-50 border border-red-200 rounded-2xl p-4">
                     <h4 class="font-extrabold text-red-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">7. Vymazať mapu (iba admin)</h4>
-                    <p><strong>Vymazanie mapy je trvalé a nevratné.</strong> Vymaže DP, priradenia aj úpravy. Potvrdzuje sa v dvoch krokoch.</p>
+                    <p><strong>Vymazanie mapy je trvalé a nevratné.</strong> Vymaže RP, priradenia aj úpravy. Potvrdzuje sa v dvoch krokoch.</p>
                 </section>
 
                 <section class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
                     <h4 class="font-extrabold text-emerald-800 uppercase tracking-wide text-[11px] sm:text-xs mb-2">8. Audit a onboarding</h4>
-                    <p>Tlačidlo <strong>Audit</strong> zobrazí históriu zmien. V ľavom paneli je kontextová nápoveda, ktorá priebežne odporúča ďalší krok podľa stavu modelovania.</p>
+                    <p>Tlačidlo <strong>Audit</strong> zobrazí históriu zmien. V ľavom paneli je kontextová nápoveda, ktorá priebežne oRPorúča ďalší krok podľa stavu modelovania.</p>
                 </section>
             </div>
         </div>
