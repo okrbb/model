@@ -367,14 +367,14 @@ function updateOnboardingPanel() {
 
     const steps = [
         { done: hasRegion, label: 'Vyberte konkrétny kraj (nie Slovensko).' },
-        { done: hasDp, label: 'Vytvorte aspoň jedno DP.' },
-        { done: hasBrush, label: 'Aktivujte DP ako štetec.' },
-        { done: hasAssignments, label: 'Priraďte okresy do DP klikom na mapu.' }
+        { done: hasDp, label: 'Vytvorte aspoň jeden región.' },
+        { done: hasBrush, label: 'Aktivujte región ako štetec.' },
+        { done: hasAssignments, label: 'Priraďte okresy do regiónu klikom na mapu.' }
     ];
 
     let nextTip = 'Vyberte konkrétny kraj a začnite modelovať.';
-    if (hasRegion && !hasDp) nextTip = 'Pridajte prvé DP cez tlačidlo Vytvoriť DP.';
-    if (hasDp && !hasBrush) nextTip = 'Kliknite na DP vľavo, tým aktivujete štetec.';
+    if (hasRegion && !hasDp) nextTip = 'Pridajte prvé pracovisko cez tlačidlo Vytvoriť región.';
+    if (hasDp && !hasBrush) nextTip = 'Kliknite na región vľavo, tým aktivujete štetec.';
     if (hasBrush && !hasAssignments) nextTip = 'Kliknite do okresov na mape, aby ste ich priradili.';
     if (hasAssignments) nextTip = 'Skontrolujte kapacity vpravo a prípadne exportujte PNG.';
 
@@ -791,7 +791,7 @@ function renderAccessPanel() {
         if (canEdit) {
             addDpReason.textContent = '';
         } else if (currentRegionKey === 'slovakia') {
-            addDpReason.textContent = '(!) Pridanie DP je dostupné až po výbere konkrétneho kraja.';
+            addDpReason.textContent = '(!) Pridanie regiónu je dostupné až po výbere konkrétneho kraja.';
         } else {
             addDpReason.textContent = '(!) Nemáte oprávnenie upravovať tento kraj.';
         }
