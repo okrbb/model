@@ -52,7 +52,7 @@ function undoLastAction() {
     if (lastAction.type === 'create-workplace') {
         delete customWorkplaces[lastAction.workplace.id];
         if (activeWorkplaceId === lastAction.workplace.id) activeWorkplaceId = null;
-        showToast(`DP ${lastAction.workplace.name} bolo odstránené (undo).`, 'danger');
+        showToast(`RP ${lastAction.workplace.name} bolo odstránené (undo).`, 'danger');
     }
 
     if (lastAction.type === 'remove-workplace') {
@@ -729,7 +729,7 @@ function resetModelData() {
 
     openConfirmModal(
         'POZOR: FINÁLNY RESET MAPY',
-        '⚠️ TÁTO AKCIA JE NEVRATNÁ! ⚠️\n\nZadaním "ÁNO" vymažete:\n• Všetky detašované pracoviská (DP)\n• Všetky priradenia okresov\n• Všetky zmeny od začiatku\n\nPokračovať?',
+        '⚠️ TÁTO AKCIA JE NEVRATNÁ! ⚠️\n\nZadaním "ÁNO" vymažete:\n• Všetky regionálne pracoviská (DP)\n• Všetky priradenia okresov\n• Všetky zmeny od začiatku\n\nPokračovať?',
         function (confirmed) {
             if (!confirmed) return;
 
