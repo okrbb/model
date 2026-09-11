@@ -352,7 +352,7 @@ function drawMapLayers(krajeData, okresyData) {
                 <div class="font-sans text-xs text-left">
                     <span class="block font-extrabold text-brand-500 uppercase tracking-tight">Okres ${tooltipDistrictName}</span>
                     <span class="block text-[10px] text-slate-300 mt-0.5">Kraj: <strong class="text-white">${regionMeta[rKey]?.name || "Neznámy"}</strong></span>
-                    <span class="block text-[10px] text-slate-300">Detašované prac. (DP): <strong class="text-emerald-400">${assignedLabel}</strong></span>
+                    <span class="block text-[10px] text-slate-300">Regionálne prac. (RP): <strong class="text-emerald-400">${assignedLabel}</strong></span>
                     <span class="block text-[10px] text-slate-300">Sila úradu: <strong class="text-white">${fteCount} FTE</strong></span>
                     ${muniCountTooltip !== null ? `<span class="block text-[10px] text-slate-300">Mestá a obce: <strong class="text-white">${muniCountTooltip}</strong></span>` : ''}
                 </div>
@@ -470,7 +470,7 @@ function drawOfflineNodeMap() {
         marker.bindTooltip(`
             <div class="font-sans text-xs text-left">
                 <span class="block font-extrabold text-brand-500 uppercase tracking-tight">Okres ${dName}</span>
-                <span class="block text-[10px] text-slate-300">Detašované prac. (DP): <strong class="text-emerald-400">${label}</strong></span>
+                <span class="block text-[10px] text-slate-300">Regionálne prac. (RP): <strong class="text-emerald-400">${label}</strong></span>
                 <span class="block text-[10px] text-slate-300">Kapacita: <strong class="text-white">${distItem.fte} FTE</strong></span>
             </div>
         `, { sticky: true, className: 'custom-map-tooltip' });
@@ -605,7 +605,7 @@ function updateDistrictTooltip(layer) {
         <div class="font-sans text-xs text-left">
             <span class="block font-extrabold text-brand-500 uppercase tracking-tight">Okres ${tooltipDistrictName}</span>
             <span class="block text-[10px] text-slate-300 mt-0.5">Kraj: <strong class="text-white">${regionMeta[rKey]?.name || "Neznámy"}</strong></span>
-            <span class="block text-[10px] text-slate-300">Detašované prac. (DP): <strong class="text-emerald-400">${assignedLabel}</strong></span>
+            <span class="block text-[10px] text-slate-300">Regionálne prac. (RP): <strong class="text-emerald-400">${assignedLabel}</strong></span>
             <span class="block text-[10px] text-slate-300">Sila úradu: <strong class="text-white">${fteCount} FTE</strong></span>
             ${muniCountTooltip !== null ? `<span class="block text-[10px] text-slate-300">Mestá a obce: <strong class="text-white">${muniCountTooltip}</strong></span>` : ''}
         </div>
@@ -649,8 +649,8 @@ function handleDistrictClick(districtName) {
 
     if (!activeWorkplaceId) {
         openPromptModal(
-            "Zvolte štetec DP", 
-            "Najskôr kliknite na vytvorené Detašované pracovisko v ľavom paneli, čím aktivujete štetec. Potom kliknite do mapy.", 
+            "Zvolte štetec RP", 
+            "Najskôr kliknite na vytvorený región v ľavom paneli, čím aktivujete štetec. Potom kliknite do mapy.", 
             'info'
         );
         return;
@@ -667,13 +667,13 @@ function handleDistrictClick(districtName) {
         });
         if (typeof addAuditEvent === 'function') {
             addAuditEvent('district-unassign', {
-                detail: `Okres ${districtName} odpojený od DP.`,
+                detail: `Okres ${districtName} oRPojený od RP.`,
                 districtName,
                 regionKey: rKey,
                 workplaceId: currentWp
             });
         }
-        showToast(`Okres ${districtName} bol odpojený od DP.`, 'info');
+        showToast(`Okres ${districtName} bol oRPojený od RP.`, 'info');
     } else {
         setDistrictWorkplaceId(districtName, activeWorkplaceId);
         addHistoryAction({
@@ -682,7 +682,7 @@ function handleDistrictClick(districtName) {
             previousWpId: currentWp,
             nextWpId: activeWorkplaceId
         });
-        const assignedName = customWorkplaces[activeWorkplaceId]?.name || 'DP';
+        const assignedName = customWorkplaces[activeWorkplaceId]?.name || 'RP';
         if (typeof addAuditEvent === 'function') {
             addAuditEvent('district-assign', {
                 detail: `Okres ${districtName} priradený do ${assignedName}.`,
