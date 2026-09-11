@@ -1857,7 +1857,7 @@ function updateSlovakiaWorkplaceSummaryPanel() {
                         </div>
                     </div>
                 `).join('')
-                : '<div class="py-1 text-[10px] text-slate-500">V kraji zatiaľ nie sú vytvorené DP.</div>')
+                : '<div class="py-1 text-[10px] text-slate-500">V kraji zatiaľ nie je vytvorený región.</div>')
             : '';
 
         return `
@@ -1973,8 +1973,8 @@ function renderLeftWorkplaceList() {
     if (activeDps.length === 0) {
         listContainer.innerHTML = `
             <div class="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs bg-slate-50">
-                <span class="block font-bold text-slate-500">Zatiaľ nie sú vytvorené žiadne DP.</span>
-                <span class="block mt-1">Použite tlačidlo Vytvoriť DP.</span>
+                <span class="block font-bold text-slate-500">Zatiaľ nie je vytvorený žiadny región.</span>
+                <span class="block mt-1">Použite tlačidlo Vytvoriť región.</span>
             </div>
         `;
         return;
