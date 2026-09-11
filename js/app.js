@@ -729,7 +729,7 @@ function resetModelData() {
 
     openConfirmModal(
         'POZOR: FINÁLNY RESET MAPY',
-        '⚠️ TÁTO AKCIA JE NEVRATNÁ! ⚠️\n\nZadaním "ÁNO" vymažete:\n• Všetky regionálne pracoviská (DP)\n• Všetky priradenia okresov\n• Všetky zmeny od začiatku\n\nPokračovať?',
+        '⚠️ TÁTO AKCIA JE NEVRATNÁ! ⚠️\n\nZadaním "ÁNO" vymažete:\n• Všetky regióny\n• Všetky priradenia okresov\n• Všetky zmeny od začiatku\n\nPokračovať?',
         function (confirmed) {
             if (!confirmed) return;
 
